@@ -9,7 +9,6 @@
 
 # Reserved keywords in the HTML programming language.
 # HTML does not really have reserved keywords in the same way as the other generator languages.
-# https://wansazlinasaruddin.com/html-reserved-words-html-elements
 # But we keep this file and dictionary anyway, to be consistent with the other generator languages.
 # Perhaps in the future add JavaScript reserved keywords here, if we do more fancy thing in the
 # generated HTML?

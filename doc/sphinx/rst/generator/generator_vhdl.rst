@@ -1,33 +1,28 @@
 .. _generator_vhdl:
 
-VHDL code generator
-===================
+VHDL generator
+==============
 
 A large ecosystem of VHDL artifacts can be generated that support both implementation
 and simulation in your project.
-See the :ref:`vhdl_register_example` below for a real-world use case of all these artifacts.
+For synthesis:
 
-* :class:`.VhdlRegisterPackageGenerator` generates the base VHDL package with register indexes and
-  modes, field indexes, field types, and field conversion functions.
-* :class:`.VhdlRecordPackageGenerator` generates a VHDL package with register records
-  that use native VHDL types for all fields, along with conversion functions for these.
+* :class:`.VhdlRegisterPackageGenerator` generates the base VHDL package with indexes,
+  modes, types, and conversion functions.
+* :class:`.VhdlRecordPackageGenerator` generates a package with register records
+  that use native VHDL types for all fields, along with conversion functions.
 * :class:`.VhdlAxiLiteWrapperGenerator` generates a VHDL entity that wraps an AXI-Lite general
   register file, and exposes register values to application using the natively typed records.
-* :class:`.VhdlSimulationReadWritePackageGenerator` generates a VHDL simulation support package with
-  procedures for reading/writing register or field values.
-* :class:`.VhdlSimulationCheckPackageGenerator` generates a VHDL simulation support package with
-  procedures for checking current register and field values against a given expected value.
-* :class:`.VhdlSimulationWaitUntilPackageGenerator` generates a VHDL simulation support package with
-  procedures for waiting until a readable register or field assumes a given value.
 
-The recommended workflow is to generate the register file wrapper from
-:class:`.VhdlAxiLiteWrapperGenerator` and instantiate it in your VHDL design.
-With this, registers and their field values are available as native VHDL typed values, requiring
-no conversion.
-See the example below for an example of this.
+For simulation:
 
+* :class:`.VhdlSimulationReadWritePackageGenerator` generates a package with
+  procedures for reading and writing register/field values as a one-liner.
+* :class:`.VhdlSimulationCheckPackageGenerator` generates a package with
+  procedures for checking current register/field values against a given expected value.
+* :class:`.VhdlSimulationWaitUntilPackageGenerator` generates a package with
+  procedures for waiting until a readable register/field assumes a given value.
 
-.. _vhdl_register_example:
 
 Example
 -------
@@ -49,7 +44,7 @@ In the registers there are a few different fields, of type :ref:`bit <field_bit>
 
 .. collapse:: Click to expand/collapse code.
 
-  .. literalinclude:: sim/regs_counter.toml
+  .. literalinclude:: example_counter/regs_counter.toml
     :caption: TOML file for example.
     :language: TOML
     :linenos:
@@ -109,7 +104,7 @@ Once again, the application is a bit silly, but it does showcase a lot of intere
 
 .. collapse:: Click to expand/collapse code.
 
-  .. literalinclude:: sim/counter.vhd
+  .. literalinclude:: example_counter/counter.vhd
     :caption: Implementation of counter example.
     :language: VHDL
     :linenos:
@@ -128,7 +123,7 @@ The VHDL below is the testbench for our example counter implementation above.
 1. The testbench uses register read/write procedures from the package produced by
    :class:`.VhdlSimulationReadWritePackageGenerator`, which can be seen
    :ref:`below <example_counter_simulation_read_write_package>`.
-   For example ``write_counter_config``.
+   For example ``write_counter_conf``.
 2. The testbench uses register wait until procedures from the package produced by
    :class:`.VhdlSimulationWaitUntilPackageGenerator`, which can be seen
    :ref:`below <example_counter_simulation_wait_until_package>`.
@@ -153,7 +148,7 @@ The VHDL below is the testbench for our example counter implementation above.
 
 .. collapse:: Click to expand/collapse code.
 
-  .. literalinclude:: sim/tb_counter.vhd
+  .. literalinclude:: example_counter/tb_counter.vhd
     :caption: Testbench for counter example.
     :language: VHDL
     :linenos:
@@ -214,7 +209,7 @@ without any manual casting.
 
 .. collapse:: Click to expand/collapse code.
 
-  .. literalinclude:: ../../../../generated/sphinx_rst/register_code/generator/generator_vhdl/counter_reg_file.vhd
+  .. literalinclude:: ../../../../generated/sphinx_rst/register_code/generator/generator_vhdl/counter_register_file_axi_lite.vhd
     :caption: Example AXI-Lite register file wrapper.
     :language: VHDL
     :linenos:
@@ -293,22 +288,25 @@ which will waste time by always re-creating, even when it is not necessary.
 See :ref:`here <performance>` for a comparison with the performance of other tools.
 
 
+.. _vhdl_dependencies:
+
 Dependencies
 ------------
 
-Most of the generated code depends on VHDL packages from `hdl-modules <https://hdl-modules.com>`_
-version 4.0.0 or greater.
+Generated VHDL code depends on files from `hdl-modules <https://hdl-modules.com>`_
+version 6.2.0 or greater:
 
-The :class:`.VhdlRegisterPackageGenerator` and :class:`.VhdlRecordPackageGenerator` packages
-depend on :ref:`reg_file.reg_file_pkg`.
-Can be downloaded from GitHub here:
-https://github.com/hdl-modules/hdl-modules/blob/main/modules/reg_file/src/reg_file_pkg.vhd
+1. `axi_lite_pkg.vhd <https://github.com/hdl-modules/hdl-modules/blob/main/modules/axi_lite/src/axi_lite_pkg.vhd>`_
+   and
+   `axi_lite_register_file.vhd <https://github.com/hdl-modules/hdl-modules/blob/main/modules/register_file/src/axi_lite_register_file.vhd>`_
+   in a library called ``axi_lite``.
+2. `register_file_pkg.vhd <https://github.com/hdl-modules/hdl-modules/blob/main/modules/register_file/src/register_file_pkg.vhd>`_
+   in a library called ``register_file``.
 
-The :class:`.VhdlSimulationReadWritePackageGenerator` and
-:class:`.VhdlSimulationWaitUntilPackageGenerator` packages
-furthermore depend on :ref:`reg_file.reg_operations_pkg` and :ref:`common.addr_pkg`.
-
-The :class:`.VhdlAxiLiteWrapperGenerator` package also depends on :ref:`axi_lite.axi_lite_pkg`.
+The simulation code is furthermore dependent on the file
+`register_operations_pkg.vhd <https://github.com/hdl-modules/hdl-modules/blob/main/modules/register_file/sim/register_operations_pkg.vhd>`_
+in the library ``register_file``, and access to `VUnit <https://vunit.github.io/>`_'s
+VHDL libraries.
 
 
 Unresolved types
@@ -342,5 +340,5 @@ the register bus:
 * AXI-Lite clock domain crossing: :ref:`axi_lite.axi_lite_cdc`,
 * etc...
 
-See the :ref:`reg_file library <module_reg_file>`, :ref:`axi library <module_axi>` and
+See the :ref:`register_file library <module_register_file>`, :ref:`axi library <module_axi>` and
 :ref:`axi_lite library <module_axi_lite>` for more details.

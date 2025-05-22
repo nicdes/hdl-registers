@@ -7,15 +7,17 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
-from typing import Optional
 
-# Local folder libraries
 from .constant import Constant
 
 
 class BooleanConstant(Constant):
-    def __init__(self, name: str, value: bool, description: Optional[str] = None):
+    """
+    Represent a boolean constant.
+    See :ref:`constant_boolean` for details.
+    """
+
+    def __init__(self, name: str, value: bool, description: str = "") -> None:
         """
         Arguments:
             name: The name of the constant.
@@ -23,7 +25,7 @@ class BooleanConstant(Constant):
             description: Textual description for the constant.
         """
         self.name = name
-        self.description = "" if description is None else description
+        self.description = description
 
         self._value = False
         # Assign self._value via setter
@@ -42,7 +44,7 @@ class BooleanConstant(Constant):
         Setter for value that performs sanity checks.
         """
         if not isinstance(value, bool):
-            raise ValueError(
+            raise TypeError(
                 f'Constant "{self.name}" has invalid data type "{type(value)}". Value: "{value}".'
             )
 

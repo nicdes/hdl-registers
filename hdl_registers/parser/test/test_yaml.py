@@ -7,11 +7,9 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Third party libraries
 import pytest
 from tsfpga.system_utils import create_file
 
-# First party libraries
 from hdl_registers.parser.yaml import from_yaml
 from hdl_registers.register import Register
 from hdl_registers.register_modes import REGISTER_MODES
@@ -64,13 +62,13 @@ hest:
         name="",
         yaml_file=yaml_path,
         default_registers=[
-            Register(name="config", index=0, mode=REGISTER_MODES["r_w"], description=""),
+            Register(name="conf", index=0, mode=REGISTER_MODES["r_w"], description=""),
             Register(name="status", index=1, mode=REGISTER_MODES["r"], description=""),
         ],
     )
 
     # Default registers.
-    assert register_list.get_register("config").index == 0
+    assert register_list.get_register("conf").index == 0
     assert register_list.get_register("status").index == 1
 
     # yaml registers.

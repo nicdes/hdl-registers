@@ -21,37 +21,43 @@ use axi_lite.axi_lite_pkg.all;
 
 library bfm;
 
-library reg_file;
+library register_file;
 
-use work.array_only_up_regs_pkg.all;
-use work.array_only_up_register_record_pkg.all;
+use work.array_only_up_register_check_pkg.all;
 use work.array_only_up_register_read_write_pkg.all;
+use work.array_only_up_register_record_pkg.all;
 use work.array_only_up_register_wait_until_pkg.all;
+use work.array_only_up_regs_pkg.all;
 
-use work.array_only_down_regs_pkg.all;
-use work.array_only_down_register_record_pkg.all;
+use work.array_only_down_register_check_pkg.all;
 use work.array_only_down_register_read_write_pkg.all;
+use work.array_only_down_register_record_pkg.all;
 use work.array_only_down_register_wait_until_pkg.all;
+use work.array_only_down_regs_pkg.all;
 
-use work.plain_and_array_only_up_regs_pkg.all;
-use work.plain_and_array_only_up_register_record_pkg.all;
+use work.plain_and_array_only_up_register_check_pkg.all;
 use work.plain_and_array_only_up_register_read_write_pkg.all;
+use work.plain_and_array_only_up_register_record_pkg.all;
 use work.plain_and_array_only_up_register_wait_until_pkg.all;
+use work.plain_and_array_only_up_regs_pkg.all;
 
-use work.plain_and_array_only_down_regs_pkg.all;
-use work.plain_and_array_only_down_register_record_pkg.all;
+use work.plain_and_array_only_down_register_check_pkg.all;
 use work.plain_and_array_only_down_register_read_write_pkg.all;
+use work.plain_and_array_only_down_register_record_pkg.all;
 use work.plain_and_array_only_down_register_wait_until_pkg.all;
+use work.plain_and_array_only_down_regs_pkg.all;
 
-use work.plain_only_up_regs_pkg.all;
-use work.plain_only_up_register_record_pkg.all;
+use work.plain_only_up_register_check_pkg.all;
 use work.plain_only_up_register_read_write_pkg.all;
+use work.plain_only_up_register_record_pkg.all;
 use work.plain_only_up_register_wait_until_pkg.all;
+use work.plain_only_up_regs_pkg.all;
 
-use work.plain_only_down_regs_pkg.all;
-use work.plain_only_down_register_record_pkg.all;
+use work.plain_only_down_register_check_pkg.all;
 use work.plain_only_down_register_read_write_pkg.all;
+use work.plain_only_down_register_record_pkg.all;
 use work.plain_only_down_register_wait_until_pkg.all;
+use work.plain_only_down_regs_pkg.all;
 
 use work.only_constants_regs_pkg.all;
 
@@ -106,7 +112,7 @@ begin
 
 
     ------------------------------------------------------------------------------
-    array_only_up_reg_file_inst : entity work.array_only_up_reg_file
+    array_only_up_register_file_axi_lite_inst : entity work.array_only_up_register_file_axi_lite
       port map(
         clk => clk,
         --
@@ -144,7 +150,7 @@ begin
 
 
     ------------------------------------------------------------------------------
-    array_only_down_reg_file_inst : entity work.array_only_down_reg_file
+    array_only_down_register_file_axi_lite_inst : entity work.array_only_down_register_file_axi_lite
       port map(
         clk => clk,
         --
@@ -182,7 +188,8 @@ begin
 
 
     ------------------------------------------------------------------------------
-    plain_and_array_only_up_reg_file_inst : entity work.plain_and_array_only_up_reg_file
+    plain_and_array_only_up_register_file_axi_lite_inst :
+      entity work.plain_and_array_only_up_register_file_axi_lite
       port map(
         clk => clk,
         --
@@ -221,7 +228,8 @@ begin
 
 
     ------------------------------------------------------------------------------
-    plain_and_array_only_down_reg_file_inst : entity work.plain_and_array_only_down_reg_file
+    plain_and_array_only_down_register_file_axi_lite_inst :
+      entity work.plain_and_array_only_down_register_file_axi_lite
       port map(
         clk => clk,
         --
@@ -257,7 +265,7 @@ begin
 
 
     ------------------------------------------------------------------------------
-    plain_only_up_reg_file_inst : entity work.plain_only_up_reg_file
+    plain_only_up_register_file_axi_lite_inst : entity work.plain_only_up_register_file_axi_lite
       port map(
         clk => clk,
         --
@@ -295,7 +303,7 @@ begin
 
 
     ------------------------------------------------------------------------------
-    plain_only_down_reg_file_inst : entity work.plain_only_down_reg_file
+    plain_only_down_register_file_axi_lite_inst : entity work.plain_only_down_register_file_axi_lite
       port map(
         clk => clk,
         --

@@ -1,3 +1,4 @@
-Added
+Fixes
 
-* Add runtime check that provided C++ bit field setter value is in range.
+* Add a few missing range checks in generated C++ code.
+* Remove a few moot range checks in generated C++ code.

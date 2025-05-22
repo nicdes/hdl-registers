@@ -7,10 +7,8 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
-from typing import Optional, Union
+from __future__ import annotations
 
-# Local folder libraries
 from .numerical_interpretation import NumericalInterpretation, Unsigned
 from .register_field import RegisterField
 
@@ -18,6 +16,7 @@ from .register_field import RegisterField
 class BitVector(RegisterField):
     """
     Used to represent a bit vector field in a register.
+    See :ref:`field_bit_vector` for details.
     """
 
     def __init__(
@@ -26,9 +25,9 @@ class BitVector(RegisterField):
         base_index: int,
         description: str,
         width: int,
-        default_value: str,
-        numerical_interpretation: Optional[NumericalInterpretation] = None,
-    ):  # pylint: disable=too-many-arguments
+        default_value: str | float,
+        numerical_interpretation: NumericalInterpretation | None = None,
+    ) -> None:
         """
         Arguments:
             name: The name of the bit vector.
@@ -36,8 +35,10 @@ class BitVector(RegisterField):
                 bit vector.
             description: Textual field description.
             width: The width of the bit vector field.
-            default_value: Default value as a string.
-                Must be of length ``width`` and contain only "1" and "0".
+            default_value: Default value.
+                Must be either a string of length ``width`` containing only "1" and "0".
+                Or a numeric value according to the ``numerical_interpretation`` that fits in
+                the ``width``.
             numerical_interpretation: The mode used when interpreting the bits of this field as
                 a numeric value.
                 Default is unsigned with no fractional bits.
@@ -79,7 +80,7 @@ class BitVector(RegisterField):
             message = (
                 f'Bit vector "{self.name}" should have integer value for "width". Got: "{width}".'
             )
-            raise ValueError(message)
+            raise TypeError(message)
 
         if width < 1 or width > 32:
             raise ValueError(f'Invalid width for bit vector "{self.name}". Got: "{width}".')
@@ -91,7 +92,7 @@ class BitVector(RegisterField):
                 f'"{self.numerical_interpretation.bit_width}".'
             )
 
-    @property  # type: ignore[override]
+    @property
     def default_value(self) -> str:
         """
         Getter for private member.
@@ -99,35 +100,52 @@ class BitVector(RegisterField):
         return self._default_value
 
     @default_value.setter
-    def default_value(self, value: str) -> None:
+    def default_value(self, value: str | float) -> None:
         """
         Setter for ``default_value`` that performs sanity checks.
         """
-        if not isinstance(value, str):
+        if not isinstance(value, (str, int, float)):
             message = (
-                f'Bit vector "{self.name}" should have string value for "default_value". '
-                f'Got: "{value}"'
+                f'Bit vector "{self.name}" should have string or numeric value '
+                f'for "default_value". Got: "{value}".'
             )
-            raise ValueError(message)
+            raise TypeError(message)
 
-        if len(value) != self.width:
-            message = (
-                f'Bit vector "{self.name}" should have "default_value" of length {self.width}. '
-                f'Got: "{value}".'
-            )
-            raise ValueError(message)
-
-        for character in value:
-            if character not in ["0", "1"]:
+        if isinstance(value, str):
+            if len(value) != self.width:
                 message = (
-                    f'Bit vector "{self.name}" invalid binary value for "default_value". '
+                    f'Bit vector "{self.name}" should have "default_value" of length {self.width}. '
                     f'Got: "{value}".'
                 )
                 raise ValueError(message)
 
-        self._default_value = value
+            for character in value:
+                if character not in ["0", "1"]:
+                    message = (
+                        f'Bit vector "{self.name}" invalid binary "default_value". Got: "{value}".'
+                    )
+                    raise ValueError(message)
 
-    def get_value(self, register_value: int) -> Union[int, float]:  # type: ignore[override]
+            self._default_value = value
+            return
+
+        try:
+            default_value_uint = self._numerical_interpretation.convert_to_unsigned_binary(
+                value=value
+            )
+        except ValueError as error:
+            message = (
+                f'Bit vector "{self.name}" should have "default_value" that fits in '
+                f'{self.width} {self._numerical_interpretation.name} bits. Got: "{value}".'
+            )
+            raise ValueError(message) from error
+
+        formatting_string = f"{{:0{self.width}b}}"
+        default_value_bin = formatting_string.format(default_value_uint)
+
+        self._default_value = default_value_bin
+
+    def get_value(self, register_value: int) -> int | float:
         """
         See super method for details.
         This subclass method uses the native numeric representation of the field value
@@ -141,7 +159,7 @@ class BitVector(RegisterField):
             unsigned_binary=value_unsigned
         )
 
-    def set_value(self, field_value: Union[int, float]) -> int:
+    def set_value(self, field_value: float) -> int:
         """
         See super method for details.
         This subclass method uses the native numeric representation of the field value

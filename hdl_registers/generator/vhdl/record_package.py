@@ -7,22 +7,21 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from __future__ import annotations
 
-# First party libraries
+from typing import TYPE_CHECKING, Any
+
 from hdl_registers.field.bit import Bit
 from hdl_registers.field.bit_vector import BitVector
 from hdl_registers.field.enumeration import Enumeration
 from hdl_registers.field.integer import Integer
 from hdl_registers.register_mode import HardwareAccessDirection, SoftwareAccessDirection
 
-# Local folder libraries
 from .vhdl_generator_common import VhdlGeneratorCommon
 
 if TYPE_CHECKING:
-    # First party libraries
+    from pathlib import Path
+
     from hdl_registers.register import Register
     from hdl_registers.register_array import RegisterArray
 
@@ -45,6 +44,7 @@ class VhdlRecordPackageGenerator(VhdlGeneratorCommon):
 
     The generated VHDL file needs also the generated package
     from :class:`.VhdlRegisterPackageGenerator`.
+    See also :ref:`vhdl_dependencies` for further dependencies.
     """
 
     __version__ = "1.0.0"
@@ -58,7 +58,10 @@ class VhdlRecordPackageGenerator(VhdlGeneratorCommon):
         """
         return self.output_folder / f"{self.name}_register_record_pkg.vhd"
 
-    def create(self, **kwargs: Any) -> Path:
+    def create(
+        self,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> Path:
         """
         See super class for API details.
 
@@ -67,21 +70,23 @@ class VhdlRecordPackageGenerator(VhdlGeneratorCommon):
         """
         return self._create_if_there_are_registers_otherwise_delete_file(**kwargs)
 
-    def get_code(self, **kwargs: Any) -> str:
+    def get_code(
+        self,
+        **kwargs: Any,  # noqa: ANN401, ARG002
+    ) -> str:
         """
         Get a complete VHDL package with register record types.
         """
         package_name = self.output_file.stem
 
         vhdl = f"""\
-{self.header}
 library ieee;
 use ieee.fixed_pkg.all;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library reg_file;
-use reg_file.reg_file_pkg.reg_t;
+library register_file;
+use register_file.register_file_pkg.register_t;
 
 use work.{self.name}_regs_pkg.all;
 
@@ -162,9 +167,9 @@ end package body;
 {init_str}
   );
   -- Convert a record of the {register_description} to SLV.
-  function to_slv(data : {register_name}_t) return reg_t;
+  function to_slv(data : {register_name}_t) return register_t;
   -- Convert an SLV register value to the record for the {register_description}.
-  function to_{register_name}(data : reg_t) return {register_name}_t;
+  function to_{register_name}(data : register_t) return {register_name}_t;
 
 """
 
@@ -212,7 +217,7 @@ return {self.name}_regs_{direction.name.lower()}_t;
 
         return vhdl
 
-    def _array_field_records(self, direction: "HardwareAccessDirection") -> str:
+    def _array_field_records(self, direction: HardwareAccessDirection) -> str:
         """
         For every register array that has at least one register in the specified direction:
 
@@ -220,7 +225,7 @@ return {self.name}_regs_{direction.name.lower()}_t;
         * Default value constant for the above record.
         * VHDL vector type of the above record, ranged per the range of the register array.
 
-        This function assumes that the register map has registers in the given direction.
+        This function assumes that the register last has registers in the given direction.
         """
         vhdl = ""
 
@@ -272,12 +277,12 @@ the '{direction.name.lower()}' direction.
 
         return f"{heading}{vhdl}"
 
-    def _get_register_record(self, direction: "HardwareAccessDirection") -> str:
+    def _get_register_record(self, direction: HardwareAccessDirection) -> str:
         """
         Get the record that contains all registers and arrays in the specified direction.
         Also default value constant for this record.
 
-        This function assumes that the register map has registers in the given direction.
+        This function assumes that the register list has registers in the given direction.
         """
         record_init = []
         vhdl = f"""\
@@ -315,7 +320,7 @@ the '{direction.name.lower()}' direction.
 """
 
     def _record_member_declaration_for_register(
-        self, register: "Register", register_array: Optional["RegisterArray"] = None
+        self, register: Register, register_array: RegisterArray | None = None
     ) -> str:
         """
         Get the record member declaration line for a register that shall be part of the record.
@@ -327,7 +332,7 @@ the '{direction.name.lower()}' direction.
         if register.fields:
             return f"    {register.name} : {register_name}_t;\n"
 
-        return f"    {register.name} : reg_t;\n"
+        return f"    {register.name} : register_t;\n"
 
     def _register_was_accessed(self) -> str:
         """
@@ -342,14 +347,14 @@ the '{direction.name.lower()}' direction.
 
         return vhdl
 
-    def _register_was_accessed_record(self, direction: "SoftwareAccessDirection") -> str:
+    def _register_was_accessed_record(self, direction: SoftwareAccessDirection) -> str:
         """
         Get the record for 'reg_was_read' or 'reg_was_written'.
         """
         vhdl = f"""\
   -- ---------------------------------------------------------------------------
   -- Below is a record with a status bit for each {direction.value.name_adjective} register in the \
-register map.
+register list.
   -- It can be used for the 'reg_was_{direction.value.name_past}' port of a register file wrapper.
 """
 
@@ -425,7 +430,7 @@ to the record above.
         """
         vhdl = ""
 
-        def _get_functions(register: "Register", register_array: Optional["RegisterArray"]) -> str:
+        def _get_functions(register: Register, register_array: RegisterArray | None) -> str:
             register_name = self.qualified_register_name(
                 register=register, register_array=register_array
             )
@@ -457,14 +462,14 @@ to the record above.
             # Set "don't care" on the bits that have no field, so that a register value comparison
             # can be true even if there is junk in the unused bits.
             return f"""\
-  function to_slv(data : {register_name}_t) return reg_t is
-    variable result : reg_t := (others => '-');
+  function to_slv(data : {register_name}_t) return register_t is
+    variable result : register_t := (others => '-');
   begin
 {to_slv}
     return result;
   end function;
 
-  function to_{register_name}(data : reg_t) return {register_name}_t is
+  function to_{register_name}(data : register_t) return {register_name}_t is
     variable result : {register_name}_t := {register_name}_init;
   begin
 {to_record}
@@ -499,7 +504,7 @@ to the record above.
         Conversion function implementation for converting a record of all the 'up' registers
         to a register SLV list.
 
-        This function assumes that the register map has registers in the given direction.
+        This function assumes that the register list has registers in the given direction.
         """
         to_slv = ""
 
@@ -544,7 +549,7 @@ to the record above.
         Conversion function implementation for converting all the 'down' registers
         in a register SLV list to record.
 
-        This function assumes that the register map has registers in the given direction.
+        This function assumes that the register list has registers in the given direction.
         """
         to_record = ""
 
@@ -598,7 +603,7 @@ to the record above.
         return vhdl
 
     def _register_was_accessed_conversion_implementation(
-        self, direction: "SoftwareAccessDirection"
+        self, direction: SoftwareAccessDirection
     ) -> str:
         """
         Get a conversion function  from SLV 'reg_was_read'/'reg_was_written' to record type.

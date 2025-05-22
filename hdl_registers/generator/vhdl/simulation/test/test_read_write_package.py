@@ -12,10 +12,8 @@ Some limited unit tests.
 Note that the generated VHDL code is also simulated in a functional test.
 """
 
-# Third party libraries
 from tsfpga.system_utils import read_file
 
-# First party libraries
 from hdl_registers.field.numerical_interpretation import (
     Signed,
     SignedFixedPoint,
@@ -114,7 +112,7 @@ def test_read_write_as_integer(tmp_path):
         return check_access_as_named_type(direction=direction, type_name="integer", name=name)
 
     def check_access_as_slv(direction: str, name: str) -> None:
-        return check_access_as_named_type(direction=direction, type_name="reg_t", name=name)
+        return check_access_as_named_type(direction=direction, type_name="register_t", name=name)
 
     def check_access_as_native(direction: str, name: str) -> None:
         return check_access_as_named_type(

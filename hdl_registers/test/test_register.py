@@ -7,10 +7,8 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Third party libraries
 import pytest
 
-# First party libraries
 from hdl_registers.register import Register
 from hdl_registers.register_modes import REGISTER_MODES
 
@@ -144,27 +142,6 @@ def test_appending_integer_to_full_register():
             default_value=0,
         )
     assert str(exception_info.value) == 'Maximum width exceeded for register "apa".'
-
-
-def test_default_value():
-    register = Register(name="apa", index=0, mode=REGISTER_MODES["r"], description="")
-    register.append_bit(name="foo", description="", default_value="1")
-    register.append_bit(name="foo", description="", default_value="0")
-    register.append_bit(name="foo", description="", default_value="1")
-    register.append_bit_vector(name="foo", description="", width=4, default_value="0110")
-    register.append_bit_vector(name="foo", description="", width=4, default_value="0101")
-
-    assert register.default_value == 1 * 2**0 + 1 * 2**2 + 6 * 2**3 + 5 * 2**7
-
-
-def test_default_value_can_be_updated():
-    register = Register(name="apa", index=0, mode=REGISTER_MODES["r"], description="")
-    register.append_bit(name="foo", description="", default_value="1")
-
-    assert register.default_value == 1
-
-    register.fields[0].default_value = "0"
-    assert register.default_value == 0
 
 
 def test_get_field():

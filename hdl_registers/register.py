@@ -7,10 +7,10 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
-from typing import TYPE_CHECKING, Optional
+from __future__ import annotations
 
-# Local folder libraries
+from typing import TYPE_CHECKING
+
 from .field.bit import Bit
 from .field.bit_vector import BitVector
 from .field.enumeration import Enumeration
@@ -18,7 +18,6 @@ from .field.integer import Integer
 from .register_mode import RegisterMode
 
 if TYPE_CHECKING:
-    # Local folder libraries
     from .field.numerical_interpretation import NumericalInterpretation
     from .field.register_field import RegisterField
 
@@ -28,7 +27,7 @@ class Register:
     Used to represent a register and its fields.
     """
 
-    def __init__(self, name: str, index: int, mode: "RegisterMode", description: str):
+    def __init__(self, name: str, index: int, mode: RegisterMode, description: str) -> None:
         """
         Arguments:
             name: The name of the register.
@@ -45,7 +44,7 @@ class Register:
         if not isinstance(mode, RegisterMode):
             # This check should be removed eventually.
             # It is only here to help users during the transition period.
-            raise ValueError(
+            raise TypeError(
                 f'Invalid mode: "{mode}". '
                 "Since version 6.0.0, the mode should be a 'RegisterMode' object, not a string."
             )
@@ -54,7 +53,7 @@ class Register:
         self.index = index
         self.mode = mode
         self.description = description
-        self.fields: list["RegisterField"] = []
+        self.fields: list[RegisterField] = []
         self.bit_index = 0
 
     def append_bit(self, name: str, description: str, default_value: str) -> Bit:
@@ -78,8 +77,8 @@ class Register:
         name: str,
         description: str,
         width: int,
-        default_value: str,
-        numerical_interpretation: Optional["NumericalInterpretation"] = None,
+        default_value: str | float,
+        numerical_interpretation: NumericalInterpretation | None = None,
     ) -> BitVector:
         """
         Append a bit vector field to this register.
@@ -146,26 +145,14 @@ class Register:
 
         return integer
 
-    def _append_field(self, field: "RegisterField") -> None:
+    def _append_field(self, field: RegisterField) -> None:
         self.fields.append(field)
 
         self.bit_index += field.width
         if self.bit_index > 32:
             raise ValueError(f'Maximum width exceeded for register "{self.name}".')
 
-    @property
-    def default_value(self) -> int:
-        """
-        The default value of this register as an unsigned integer.
-        Depends on the default values of the fields in this register.
-        """
-        default_value = 0
-        for field in self.fields:
-            default_value += field.default_value_uint * 2**field.base_index
-
-        return default_value
-
-    def get_field(self, name: str) -> "RegisterField":
+    def get_field(self, name: str) -> RegisterField:
         """
         Get the field within this register that has the given name. Will raise exception if no
         field matches.
@@ -195,5 +182,5 @@ name={self.name},\
 index={self.index},\
 mode={self.mode},\
 description={self.description},\
-fields={','.join([repr(field) for field in self.fields])},\
+fields={",".join([repr(field) for field in self.fields])},\
 )"""

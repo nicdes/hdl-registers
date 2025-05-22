@@ -11,7 +11,6 @@
 Import this file to have the default paths of some third party packages added to PYTHONPATH.
 """
 
-# Standard libraries
 import sys
 from pathlib import Path
 
@@ -24,3 +23,15 @@ REPO_ROOT = Path(__file__).parent.parent.resolve()
 # repo/tsfpga/tsfpga
 PATH_TO_TSFPGA = REPO_ROOT.parent.parent.resolve() / "tsfpga" / "tsfpga"
 sys.path.insert(0, str(PATH_TO_TSFPGA))
+
+# Paths e.g.
+# repo/hdl-registers/hdl-registers
+# repo/hdl-modules/hdl-modules
+PATH_TO_HDL_MODULES = REPO_ROOT.parent.parent.resolve() / "hdl-modules" / "hdl-modules"
+sys.path.insert(0, str(PATH_TO_HDL_MODULES))
+
+# Paths e.g.
+# repo/hdl-registers/hdl-registers
+# repo/vunit/vunit
+PATH_TO_VUNIT = REPO_ROOT.parent.parent.resolve() / "vunit" / "vunit"
+sys.path.insert(0, str(PATH_TO_VUNIT))

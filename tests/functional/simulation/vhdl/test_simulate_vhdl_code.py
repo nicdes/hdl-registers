@@ -6,26 +6,29 @@
 # https://hdl-registers.com
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
+# Works with any VHDL simulator supported by VUnit. Tested with GHDL and ModelSim.
+# --------------------------------------------------------------------------------------------------
 
-# Standard libraries
 import sys
 from os import environ
 from pathlib import Path
-from xml.etree import ElementTree
+from xml.etree import ElementTree  # noqa: ICN001
+
+import pytest
 
 THIS_DIR = Path(__file__).parent.resolve()
-REPO_ROOT = THIS_DIR.parent.parent.parent.resolve()
+REPO_ROOT = THIS_DIR.parent.parent.parent.parent.resolve()
 sys.path.append(str(REPO_ROOT))
 
 # Add path for default location of tsfpga to PYTHONPATH.
 sys.path.append(str((REPO_ROOT.parent.parent / "tsfpga" / "tsfpga").resolve()))
 
-# Third party libraries
+# ruff: noqa: E402
+
 from tsfpga.examples.example_env import get_hdl_modules
 from tsfpga.system_utils import create_directory
 from vunit import VUnit
 
-# First party libraries
 from hdl_registers import HDL_REGISTERS_DOC, HDL_REGISTERS_GENERATED, HDL_REGISTERS_TESTS
 from hdl_registers.field.numerical_interpretation import (
     Signed,
@@ -40,7 +43,7 @@ from hdl_registers.generator.vhdl.test.test_register_vhdl_generator import (
 from hdl_registers.parser.toml import from_toml
 from hdl_registers.register_modes import REGISTER_MODES
 
-DOC_SIM_FOLDER = HDL_REGISTERS_DOC / "sphinx" / "rst" / "generator" / "sim"
+COUNTER_EXAMPLE_FOLDER = HDL_REGISTERS_DOC / "sphinx" / "rst" / "generator" / "example_counter"
 
 
 def test_running_simulation(tmp_path):
@@ -69,7 +72,8 @@ def test_running_simulation(tmp_path):
             str(vunit_out_path),
             "--xunit-xml",
             str(xml_report_path),
-        ] + args
+            *args,
+        ]
         vunit_proj = VUnit.from_argv(argv=argv)
         vunit_proj.add_verification_components()
         vunit_proj.add_vhdl_builtins()
@@ -79,7 +83,7 @@ def test_running_simulation(tmp_path):
         for vhd_file in THIS_DIR.glob("*.vhd"):
             library.add_source_file(vhd_file)
 
-        for vhd_file in DOC_SIM_FOLDER.glob("*.vhd"):
+        for vhd_file in COUNTER_EXAMPLE_FOLDER.glob("*.vhd"):
             library.add_source_file(vhd_file)
 
         for vhd_file in generated_register_path.glob("*.vhd"):
@@ -90,10 +94,9 @@ def test_running_simulation(tmp_path):
             for hdl_file in module.get_simulation_files(include_tests=False):
                 vunit_library.add_source_file(hdl_file.path)
 
-        try:
+        with pytest.raises(SystemExit) as exception_info:
             vunit_proj.main()
-        except SystemExit as exception:
-            assert exception.code == exit_code
+        assert exception_info.value.code == exit_code
 
     # All these tests should pass.
     run(
@@ -145,19 +148,19 @@ def test_running_simulation(tmp_path):
                 "the 'dummies[1]' register array. - Got 1. Expected 0."
             ),
             f"{tb_check}test_check_equal_fail_for_bit_field": (
-                "ERROR - Checking the 'plain_bit_a' field in the 'config' "
+                "ERROR - Checking the 'plain_bit_a' field in the 'conf' "
                 "register. - Got 0. Expected 1."
             ),
             f"{tb_check}test_check_equal_fail_for_bit_vector_field_at_a_base_address": (
-                "ERROR - Checking the 'plain_bit_vector' field in the 'config' "
+                "ERROR - Checking the 'plain_bit_vector' field in the 'conf' "
                 'register (at base address x"00050000"). - Got 0011 (3). Expected 1100 (12).'
             ),
             f"{tb_check}test_check_equal_fail_for_enumeration_field": (
-                "ERROR - Checking the 'plain_enumeration' field in the 'config' "
+                "ERROR - Checking the 'plain_enumeration' field in the 'conf' "
                 "register. - Got plain_enumeration_third. Expected plain_enumeration_fifth."
             ),
             f"{tb_check}test_check_equal_fail_for_integer_field": (
-                "ERROR - Checking the 'plain_integer' field in the 'config' "
+                "ERROR - Checking the 'plain_integer' field in the 'conf' "
                 "register. - Got 66. Expected -33."
             ),
             f"{tb_check}test_check_equal_fail_for_sfixed_field": (
@@ -169,18 +172,18 @@ def test_running_simulation(tmp_path):
                 "register. Custom message here. - Got 111111.11 (63.750000). "
                 "Expected 101010.10 (42.500000)."
             ),
-            #
+            # ------------------------------------------------------------
             f"{tb_integration}test_reading_write_only_register_should_fail": (
                 "FAILURE - rresp - Got AXI response SLVERR(10) expected OKAY(00)"
             ),
             f"{tb_integration}test_writing_read_only_register_should_fail": (
                 "FAILURE - bresp - Got AXI response SLVERR(10) expected OKAY(00)"
             ),
-            #
+            # ------------------------------------------------------------
             f"{tb_register_package}test_enumeration_out_of_range": out_of_range,
             f"{tb_register_package}test_integer_from_slv_out_of_range": out_of_range,
             f"{tb_register_package}test_integer_to_slv_out_of_range": out_of_range,
-            #
+            # ------------------------------------------------------------
             f"{tb_wait_until}test_wait_until_array_field_equals_timeout_with_base_address": (
                 "FAILURE - Timeout while waiting for the 'array_integer' field in the 'first' "
                 "register within the 'dummies[1]' register array (at base address x\"00050000\") "
@@ -199,15 +202,15 @@ def test_running_simulation(tmp_path):
             ),
             f"{tb_wait_until}test_wait_until_plain_field_equals_timeout_with_message": (
                 "FAILURE - Timeout while waiting for the 'plain_integer' field in the "
-                "'config' register to equal the given "
+                "'conf' register to equal the given "
                 "value: -------------------11011111-----. Extra printout that can be set!."
             ),
             f"{tb_wait_until}test_wait_until_plain_field_equals_timeout": (
                 "FAILURE - Timeout while waiting for the 'plain_integer' field in the "
-                "'config' register to equal the given value: -------------------11011111-----."
+                "'conf' register to equal the given value: -------------------11011111-----."
             ),
             f"{tb_wait_until}test_wait_until_plain_register_equals_timeout": (
-                "FAILURE - Timeout while waiting for the 'config' register to equal the given "
+                "FAILURE - Timeout while waiting for the 'conf' register to equal the given "
                 "value: ---------------01001101111111001."
             ),
         },
@@ -259,7 +262,9 @@ def generate_toml_registers(output_path):
 
 
 def generate_doc_registers(output_path):
-    register_list = from_toml(name="counter", toml_file=DOC_SIM_FOLDER / "regs_counter.toml")
+    register_list = from_toml(
+        name="counter", toml_file=COUNTER_EXAMPLE_FOLDER / "regs_counter.toml"
+    )
 
     generate_all_vhdl_artifacts(register_list=register_list, output_folder=output_path)
 
@@ -271,7 +276,7 @@ def check_failed_tests(xml_report_file: Path, test_outputs: dict[str, str]) -> N
     * all tests failed, and
     * the test output is the expected.
     """
-    tree = ElementTree.parse(xml_report_file)
+    tree = ElementTree.parse(xml_report_file)  # noqa: S314
     root = tree.getroot()
 
     num_tests = int(root.attrib["tests"])

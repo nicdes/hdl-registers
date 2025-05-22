@@ -7,11 +7,9 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
 from pathlib import Path
 from typing import Any
 
-# First party libraries
 from hdl_registers.generator.vhdl.vhdl_generator_common import VhdlGeneratorCommon
 from hdl_registers.register_mode import HardwareAccessDirection, SoftwareAccessDirection
 
@@ -25,14 +23,9 @@ class VhdlAxiLiteWrapperGenerator(VhdlGeneratorCommon):
     ``regs_down``.
     This makes it very easy-to-use and saves a lot of manual conversion.
 
-    It wraps the following VHDL file:
-
-    * https://hdl-modules.com/modules/reg_file/reg_file.html#axi-lite-reg-file-vhd
-    * https://github.com/hdl-modules/hdl-modules/blob/main/modules/reg_file/src/\
-axi_lite_reg_file.vhd
-
-    It also requires the generated packages from
+    The file is dependent on the packages from
     :class:`.VhdlRegisterPackageGenerator` and :class:`.VhdlRecordPackageGenerator`.
+    See also :ref:`vhdl_dependencies` for further dependencies.
 
     Note that the ``regs_up`` port is only available if there are any registers of a type where
     hardware gives a value to the bus.
@@ -45,10 +38,10 @@ axi_lite_reg_file.vhd
     value to the hardware, e.g. "Read, Write".
 
     Similar concept for the ``reg_was_read`` and ``reg_was_written`` ports.
-    They are only present if there are any readable/writeable registers in the register map.
+    They are only present if there are any readable/writeable registers in the register list.
     """
 
-    __version__ = "1.0.0"
+    __version__ = "1.0.3"
 
     SHORT_DESCRIPTION = "VHDL AXI-Lite register file"
 
@@ -57,18 +50,31 @@ axi_lite_reg_file.vhd
         """
         Result will be placed in this file.
         """
-        return self.output_folder / f"{self.name}_reg_file.vhd"
+        return self.output_folder / f"{self.name}_register_file_axi_lite.vhd"
 
-    def create(self, **kwargs: Any) -> Path:
+    def create(
+        self,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> Path:
         """
         See super class for API details.
 
         Overloaded here because this file shall only be created if the register list
         actually has any registers.
         """
+        # The artifact from this generator was renamed in version 7.0.0.
+        # An old artifact laying around might cause confusion and compilation errors.
+        old_output_file = self.output_folder / f"{self.name}_reg_file.vhd"
+        if old_output_file.exists():
+            print(f"Deleting old artifact {old_output_file}")
+            old_output_file.unlink()
+
         return self._create_if_there_are_registers_otherwise_delete_file(**kwargs)
 
-    def get_code(self, **kwargs: Any) -> str:
+    def get_code(
+        self,
+        **kwargs: Any,  # noqa: ANN401, ARG002
+    ) -> str:
         """
         Get VHDL code for a wrapper around the generic AXi_lite register file from hdl-modules:
         """
@@ -77,9 +83,7 @@ axi_lite_reg_file.vhd
         up_port = f"    regs_up : in {self.name}_regs_up_t := {self.name}_regs_up_init;\n"
         has_any_up = self.has_any_hardware_accessible_register(HardwareAccessDirection.UP)
 
-        down_port = (
-            f"    regs_down : out {self.name}_regs_down_t " f":= {self.name}_regs_down_init;\n"
-        )
+        down_port = f"    regs_down : out {self.name}_regs_down_t := {self.name}_regs_down_init;\n"
         has_any_down = self.has_any_hardware_accessible_register(HardwareAccessDirection.DOWN)
 
         was_read_port, was_written_port = self._get_was_accessed_ports()
@@ -91,6 +95,11 @@ axi_lite_reg_file.vhd
 entity {entity_name} is
   port (
     clk : in std_ulogic;
+    -- Active-high synchronous reset.
+    -- The code in this entity uses initial values so an initial reset is NOT necessary.
+    -- This port can safely be left unconnected and tied to zero.
+    -- If asserted, it will reset the AXI-Lite handshaking state as well as all register values.
+    reset : in std_ulogic := '0';
     --# {{}}
     --# Register control bus.
     axi_lite_m2s : in axi_lite_m2s_t;
@@ -150,27 +159,26 @@ are present.
   end process;
 """
 
-        vhdl = f"""\
+        return f"""\
 -- -----------------------------------------------------------------------------
 -- AXI-Lite register file for the '{self.name}' module registers.
---
--- Is a wrapper around the generic AXI-Lite register file from hdl-modules:
--- * https://hdl-modules.com/modules/reg_file/reg_file.html#axi-lite-reg-file-vhd
--- * https://github.com/hdl-modules/hdl-modules/blob/main/modules/reg_file/src/axi_lite_reg_file.vhd
---
 -- Sets correct generics, and performs conversion to the easy-to-use register record types.
--- -----------------------------------------------------------------------------
-{self.header}\
 -- -----------------------------------------------------------------------------
 
 library ieee;
 use ieee.std_logic_1164.all;
 
+-- This VHDL file is a required dependency:
+-- https://github.com/hdl-modules/hdl-modules/blob/main/modules/axi_lite/src/axi_lite_pkg.vhd
+-- See https://hdl-registers.com/rst/generator/generator_vhdl.html for dependency details.
 library axi_lite;
 use axi_lite.axi_lite_pkg.all;
 
-library reg_file;
-use reg_file.reg_file_pkg.all;
+-- This VHDL file is a required dependency:
+-- https://github.com/hdl-modules/hdl-modules/blob/main/modules/register_file/src/\
+axi_lite_register_file.vhd
+-- See https://hdl-registers.com/rst/generator/generator_vhdl.html for dependency details.
+library register_file;
 
 use work.{self.name}_regs_pkg.all;
 use work.{self.name}_register_record_pkg.all;
@@ -188,17 +196,18 @@ architecture a of {entity_name} is
 begin
 
   ------------------------------------------------------------------------------
-  -- Instantiate the generic AXI-Lite register file from
-  -- * https://hdl-modules.com/modules/reg_file/reg_file.html#axi-lite-reg-file-vhd
-  -- * https://github.com/hdl-modules/hdl-modules/blob/main/modules/reg_file/src/\
-axi_lite_reg_file.vhd
-  axi_lite_reg_file_inst : entity reg_file.axi_lite_reg_file
+  -- Instantiate the generic register file implementation:
+  -- https://github.com/hdl-modules/hdl-modules/blob/main/modules/register_file/src/\
+axi_lite_register_file.vhd
+  -- See https://hdl-registers.com/rst/generator/generator_vhdl.html for dependency details.
+  axi_lite_register_file_inst : entity register_file.axi_lite_register_file
     generic map (
-      regs => {self.name}_reg_map,
+      registers => {self.name}_register_map,
       default_values => {self.name}_regs_init
     )
     port map(
       clk => clk,
+      reset => reset,
       --
       axi_lite_m2s => axi_lite_m2s,
       axi_lite_s2m => axi_lite_s2m,
@@ -216,8 +225,6 @@ axi_lite_reg_file.vhd
 
 end architecture;
 """
-
-        return vhdl
 
     def _get_was_accessed_ports(self) -> tuple[str, str]:
         has_any_read = self.has_any_software_accessible_register(
@@ -238,10 +245,7 @@ end architecture;
         )
 
         was_read = (
-            (
-                f"    reg_was_read : out {self.name}_reg_was_read_t := "
-                f"{self.name}_reg_was_read_init"
-            )
+            f"    reg_was_read : out {self.name}_reg_was_read_t := {self.name}_reg_was_read_init"
             if has_any_read
             else ""
         )

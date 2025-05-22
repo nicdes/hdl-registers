@@ -1,7 +1,9 @@
 black
+docutils
 GitPython
+peakrdl-regblock>=1.0.0,<2.0.0
 PyYAML
 rtoml
 termcolor
 tomli-w
-tsfpga>= 12.3.6
+tsfpga>=13.2.0

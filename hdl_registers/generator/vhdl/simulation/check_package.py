@@ -7,21 +7,20 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from __future__ import annotations
 
-# First party libraries
+from typing import TYPE_CHECKING, Any
+
 from hdl_registers.field.bit_vector import BitVector
 from hdl_registers.field.enumeration import Enumeration
 from hdl_registers.field.numerical_interpretation import Fixed
 from hdl_registers.register_mode import SoftwareAccessDirection
 
-# Local folder libraries
 from .vhdl_simulation_generator_common import VhdlSimulationGeneratorCommon
 
 if TYPE_CHECKING:
-    # First party libraries
+    from pathlib import Path
+
     from hdl_registers.field.register_field import RegisterField
     from hdl_registers.register import Register
     from hdl_registers.register_array import RegisterArray
@@ -50,9 +49,10 @@ class VhdlSimulationCheckPackageGenerator(VhdlSimulationGeneratorCommon):
 
     The generated VHDL file needs also the generated packages from
     :class:`.VhdlRegisterPackageGenerator` and :class:`.VhdlRecordPackageGenerator`.
+    See also :ref:`vhdl_dependencies` for further dependencies.
     """
 
-    __version__ = "1.2.0"
+    __version__ = "1.2.1"
 
     SHORT_DESCRIPTION = "VHDL simulation check package"
 
@@ -63,7 +63,10 @@ class VhdlSimulationCheckPackageGenerator(VhdlSimulationGeneratorCommon):
         """
         return self.output_folder / f"{self.name}_register_check_pkg.vhd"
 
-    def create(self, **kwargs: Any) -> Path:
+    def create(
+        self,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> Path:
         """
         See super class for API details.
 
@@ -72,14 +75,16 @@ class VhdlSimulationCheckPackageGenerator(VhdlSimulationGeneratorCommon):
         """
         return self._create_if_there_are_registers_otherwise_delete_file(**kwargs)
 
-    def get_code(self, **kwargs: Any) -> str:
+    def get_code(
+        self,
+        **kwargs: Any,  # noqa: ANN401, ARG002
+    ) -> str:
         """
         Get a package with methods for checking register/field values.
         """
         package_name = self.output_file.stem
 
-        vhdl = f"""\
-{self.header}
+        return f"""\
 library ieee;
 use ieee.fixed_pkg.all;
 use ieee.numeric_std.all;
@@ -92,12 +97,9 @@ use vunit_lib.checker_pkg.all;
 use vunit_lib.com_types_pkg.network_t;
 use vunit_lib.string_ops.hex_image;
 
-library common;
-use common.addr_pkg.addr_t;
-
-library reg_file;
-use reg_file.reg_file_pkg.reg_t;
-use reg_file.reg_operations_pkg.regs_bus_master;
+library register_file;
+use register_file.register_file_pkg.register_t;
+use register_file.register_operations_pkg.register_bus_master;
 
 use work.{self.name}_register_read_write_pkg.all;
 use work.{self.name}_register_record_pkg.all;
@@ -114,8 +116,6 @@ package body {package_name} is
 {self._implementations()}\
 end package body;
 """
-
-        return vhdl
 
     def _declarations(self) -> str:
         """
@@ -156,7 +156,7 @@ end package body;
                 # GHDL gets confused in this case between using the signature with the record
                 # or the one with SLV.
                 signature = self._register_check_signature(
-                    register=register, register_array=register_array, value_type="reg_t"
+                    register=register, register_array=register_array, value_type="register_t"
                 )
                 declarations.append(f"{signature};\n")
 
@@ -177,7 +177,7 @@ end package body;
         return vhdl
 
     def _register_check_signature(
-        self, register: "Register", register_array: Optional["RegisterArray"], value_type: str
+        self, register: Register, register_array: RegisterArray | None, value_type: str
     ) -> str:
         """
         Get signature for a 'check_X_equal' procedure for register values.
@@ -192,8 +192,10 @@ end package body;
         # since it is the default.
         type_comment = (
             " as a plain SLV"
-            if value_type == "reg_t"
-            else " as a plain SLV casted to integer" if value_type == "integer" else ""
+            if value_type == "register_t"
+            else " as a plain SLV casted to integer"
+            if value_type == "integer"
+            else ""
         )
 
         return f"""\
@@ -203,17 +205,17 @@ end package body;
     signal net : inout network_t;
 {self.get_array_index_port(register_array=register_array)}\
     expected : in {value_type};
-    base_address : in addr_t := (others => '0');
-    bus_handle : in bus_master_t := regs_bus_master;
+    base_address : in unsigned(32 - 1 downto 0) := (others => '0');
+    bus_handle : in bus_master_t := register_bus_master;
     message : in string := ""
   )\
 """
 
     def _field_check_signature(
         self,
-        register: "Register",
-        register_array: Optional["RegisterArray"],
-        field: "RegisterField",
+        register: Register,
+        register_array: RegisterArray | None,
+        field: RegisterField,
     ) -> str:
         """
         Get signature for a 'check_X_equal' procedure for field values.
@@ -236,8 +238,8 @@ end package body;
     signal net : inout network_t;
 {self.get_array_index_port(register_array=register_array)}\
     expected : in {value_type};
-    base_address : in addr_t := (others => '0');
-    bus_handle : in bus_master_t := regs_bus_master;
+    base_address : in unsigned(32 - 1 downto 0) := (others => '0');
+    bus_handle : in bus_master_t := register_bus_master;
     message : in string := ""
   )\
 """
@@ -255,14 +257,13 @@ end package body;
             register_name = self.qualified_register_name(
                 register=register, register_array=register_array
             )
-            implementations = []
 
             # Check the register value as a plain SLV casted to integer.
-            implementations.append(
+            implementations = [
                 self._register_check_implementation(
                     register=register, register_array=register_array, value_type="integer"
                 )
-            )
+            ]
 
             if register.fields:
                 # Check the register value as a record.
@@ -277,17 +278,17 @@ end package body;
                 # Check the register value as a plain SLV.
                 implementations.append(
                     self._register_check_implementation(
-                        register=register, register_array=register_array, value_type="reg_t"
+                        register=register, register_array=register_array, value_type="register_t"
                     )
                 )
 
             # Check the value of each field.
-            for field in register.fields:
-                implementations.append(
-                    self._field_check_implementation(
-                        register=register, register_array=register_array, field=field
-                    )
+            implementations.extend(
+                self._field_check_implementation(
+                    register=register, register_array=register_array, field=field
                 )
+                for field in register.fields
+            )
 
             if implementations:
                 vhdl += separator
@@ -298,7 +299,7 @@ end package body;
         return vhdl
 
     def _register_check_implementation(
-        self, register: "Register", register_array: Optional["RegisterArray"], value_type: str
+        self, register: Register, register_array: RegisterArray | None, value_type: str
     ) -> str:
         """
         Get implementation for a 'check_X_equal' procedure for field values.
@@ -310,7 +311,7 @@ end package body;
             register=register, register_array=register_array
         )
 
-        if value_type not in ["reg_t", "integer"]:
+        if value_type not in ["register_t", "integer"]:
             # These value types do not work with the standard VUnit check procedures, because
             # they are custom types.
             # They also can not be casted to string directly.
@@ -359,9 +360,9 @@ end package body;
 
     def _field_check_implementation(
         self,
-        register: "Register",
-        register_array: Optional["RegisterArray"],
-        field: "RegisterField",
+        register: Register,
+        register_array: RegisterArray | None,
+        field: RegisterField,
     ) -> str:
         """
         Get implementation for a 'check_X_equal' procedure for field values.

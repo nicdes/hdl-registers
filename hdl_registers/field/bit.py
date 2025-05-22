@@ -7,18 +7,18 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Local folder libraries
 from .register_field import RegisterField
 
 
 class Bit(RegisterField):
     """
     Used to represent a bit field in a register.
+    See :ref:`field_bit` for details.
     """
 
     _width = 1
 
-    def __init__(self, name: str, index: int, description: str, default_value: str):
+    def __init__(self, name: str, index: int, description: str, default_value: str) -> None:
         """
         Arguments:
             name: The name of the bit.
@@ -34,7 +34,7 @@ class Bit(RegisterField):
         # Assign self._default_value via setter
         self.default_value = default_value
 
-    @property  # type: ignore[override]
+    @property
     def default_value(self) -> str:
         """
         Getter for private member.
@@ -50,7 +50,7 @@ class Bit(RegisterField):
             message = (
                 f'Bit "{self.name}" should have string value for "default_value". Got "{value}".'
             )
-            raise ValueError(message)
+            raise TypeError(message)
 
         if value not in ["0", "1"]:
             message = f'Bit "{self.name}" invalid binary value for "default_value". Got: "{value}".'

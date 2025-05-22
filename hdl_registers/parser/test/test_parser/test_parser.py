@@ -7,11 +7,9 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Third party libraries
 import pytest
 from tsfpga.system_utils import create_file
 
-# First party libraries
 from hdl_registers.parser.toml import from_toml
 from hdl_registers.register_modes import REGISTER_MODES
 
@@ -47,7 +45,7 @@ hest.type = "register_constant"
     )
 
 
-def test_order_of_registers_and_fields(tmp_path):  # pylint: disable=too-many-statements
+def test_order_of_registers_and_fields(tmp_path):  # noqa: PLR0915
     toml_data = """
 ################################################################################
 [data]
@@ -89,7 +87,7 @@ count.max_value = 15
 
 
 ################################################################################
-[config]
+[conf]
 
 type = "register_array"
 array_length = 3
@@ -97,32 +95,32 @@ description = "A register array"
 
 
 # ------------------------------------------------------------------------------
-[config.input_settings]
+[conf.input_settings]
 
 type = "register"
 description = "Input configuration"
 mode = "r_w"
 
-[config.input_settings.enable]
+[conf.input_settings.enable]
 
 type = "bit"
 description = "Enable things"
 default_value = "1"
 
-[config.input_settings.disable]
+[conf.input_settings.disable]
 
 type = "bit"
 description = ""
 default_value = "0"
 
-[config.input_settings.number]
+[conf.input_settings.number]
 
 type = "integer"
 description = "Configure number"
 max_value = 3
 default_value = 1
 
-[config.input_settings.size]
+[conf.input_settings.size]
 
 type = "enumeration"
 default_value = "large"
@@ -132,12 +130,12 @@ element.large = ""
 
 
 # ------------------------------------------------------------------------------
-[config.output_settings]
+[conf.output_settings]
 
 type = "register"
 mode = "w"
 
-[config.output_settings.data]
+[conf.output_settings.data]
 
 type = "bit_vector"
 width = 16
@@ -152,7 +150,6 @@ default_value = "0000000000000011"
     assert registers[0].mode == REGISTER_MODES["w"]
     assert registers[0].index == 0
     assert registers[0].description == ""
-    assert registers[0].default_value == 0
     assert registers[0].fields == []
 
     assert registers[1].name == "status"
@@ -193,20 +190,7 @@ default_value = "0000000000000011"
     assert registers[1].fields[4].max_value == 15
     assert registers[1].fields[4].default_value == -5
 
-    assert registers[1].default_value == (
-        # Enum
-        1 * 2**0
-        # Bit
-        + 0 * 2**2
-        # Bit vector
-        + 6 * 2**3
-        # Bit
-        + 1 * 2**7
-        # Integer, negative value converted to positive
-        + 0b11011 * 2**8
-    )
-
-    assert registers[2].name == "config"
+    assert registers[2].name == "conf"
     assert registers[2].length == 3
     assert registers[2].description == "A register array"
     assert registers[2].index == 2 + 2 * 3 - 1
@@ -227,20 +211,11 @@ default_value = "0000000000000011"
     assert registers[2].registers[0].fields[2].default_value == 1
     assert registers[2].registers[0].fields[3].name == "size"
     assert registers[2].registers[0].fields[3].default_value.name == "large"
-    assert registers[2].registers[0].default_value == (
-        # First bit
-        1 * 2**0
-        # Integer
-        + 1 * 2**2
-        # Enumeration
-        + 2 * 2**4
-    )
 
     assert registers[2].registers[1].name == "output_settings"
     assert registers[2].registers[1].mode == REGISTER_MODES["w"]
     assert registers[2].registers[1].index == 1
     assert registers[2].registers[1].description == ""
-    assert registers[2].registers[1].default_value == 3
     assert registers[2].registers[1].fields[0].name == "data"
     assert registers[2].registers[1].fields[0].description == "Some data"
     assert registers[2].registers[1].fields[0].width == 16
