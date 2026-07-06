@@ -7,27 +7,25 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
+from __future__ import annotations
+
 import datetime
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
-# Third party libraries
 from tsfpga.git_utils import get_git_commit, git_commands_are_available
 from tsfpga.svn_utils import get_svn_revision_information, svn_commands_are_available
-from tsfpga.system_utils import create_file, path_relative_to, read_file
+from tsfpga.system_utils import create_file, read_file
 
-# First party libraries
 from hdl_registers import __version__ as hdl_registers_version
+from hdl_registers.field.enumeration import Enumeration
 
-# Local folder libraries
 from .register_code_generator_helpers import RegisterCodeGeneratorHelpers
 from .reserved_keywords import RESERVED_KEYWORDS
 
 if TYPE_CHECKING:
-    # First party libraries
     from hdl_registers.register_list import RegisterList
 
 
@@ -42,7 +40,7 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
 
     @property
     @abstractmethod
-    def SHORT_DESCRIPTION(self) -> str:  # pylint: disable=invalid-name
+    def SHORT_DESCRIPTION(self) -> str:  # noqa: N802
         """
         A short description of what this generator produces.
         Will be used when printing status messages.
@@ -51,14 +49,16 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
 
         .. code-block:: python
 
-          SHORT_DESCRIPTION = "C++ header"
+          class MyCoolGenerator(RegisterCodeGenerator):
+
+              SHORT_DESCRIPTION = "C++ header"
 
         as a static class member at the top of the class.
         """
 
     @property
-    @abstractmethod  # type: ignore[override]
-    def COMMENT_START(self) -> str:  # pylint: disable=invalid-name
+    @abstractmethod
+    def COMMENT_START(self) -> str:  # noqa: N802
         """
         The character(s) that start a comment line in the programming language that we are
         generating code for.
@@ -67,9 +67,12 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
 
         .. code-block:: python
 
-          COMMENT_START = "#"
+          class MyCoolGenerator(RegisterCodeGenerator):
+
+              COMMENT_START = "#"
 
         as a static class member at the top of the class.
+        Note that for some languages you might have to set :attr:`.COMMENT_END` as well.
         """
 
     @property
@@ -90,7 +93,10 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
         """
 
     @abstractmethod
-    def get_code(self, **kwargs: Any) -> str:  # pylint: disable=unused-argument
+    def get_code(
+        self,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> str:
         """
         Get the generated code as a string.
 
@@ -119,7 +125,7 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
     # is called.
     __version__ = "0.0.1"
 
-    def __init__(self, register_list: "RegisterList", output_folder: Path):
+    def __init__(self, register_list: RegisterList, output_folder: Path) -> None:
         """
         Arguments:
             register_list: Registers and constants from this register list will be included
@@ -131,7 +137,10 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
 
         self.name = register_list.name
 
-    def create(self, **kwargs: Any) -> Path:
+    def create(
+        self,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> Path:
         """
         Generate the result artifact.
         I.e. create the :meth:`.output_file` containing the result from :meth:`.get_code` method.
@@ -146,23 +155,42 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
         """
         output_file = self.output_file
 
-        try:
-            path_to_print = path_relative_to(path=output_file, other=Path("."))
-        except ValueError:
-            # Fails on Windows if CWD and the file are on different drives.
+        current_working_directory = Path.cwd()
+        if current_working_directory in output_file.parents:
+            # Print a shorter path if the output is inside the CWD.
+            path_to_print = output_file.relative_to(current_working_directory)
+        else:
+            # But don't print a long string of ../../ if it is outside, but instead the full path.
             path_to_print = output_file
         print(f"Creating {self.SHORT_DESCRIPTION} file: {path_to_print}")
 
         self._sanity_check()
 
+        # Constructing the code and creating the file is in a separate method that can
+        # be overridden.
+        # Everything above should be common though.
+        return self._create_artifact(output_file=output_file, **kwargs)
+
+    def _create_artifact(
+        self,
+        output_file: Path,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> Path:
+        """
+        The last stage of creating the file: Constructs the code and creates the file.
+        This method is called by :meth:`.create` and should not be called directly.
+        It is separated out to make it easier to override some specific behaviors in subclasses.
+        """
         code = self.get_code(**kwargs)
+        result = f"{self.header}\n{code}"
 
         # Will create the containing folder unless it already exists.
-        create_file(file=output_file, contents=code)
+        return create_file(file=output_file, contents=result)
 
-        return output_file
-
-    def create_if_needed(self, **kwargs: Any) -> tuple[bool, Path]:
+    def create_if_needed(
+        self,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> tuple[bool, Path]:
         """
         Generate the result file if needed.
         I.e. call :meth:`.create` if :meth:`.should_create` is ``True``.
@@ -210,23 +238,24 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
         The version and hash checks above are dependent on the artifact file having a header
         as given by :meth:`.header`.
         """
-        output_file = self.output_file
+        return self._should_create(file_path=self.output_file)
 
-        if not output_file.exists():
+    def _should_create(self, file_path: Path) -> bool:
+        """
+        Check if a (re-)create of this specific artifact is needed.
+        """
+        if not file_path.exists():
             return True
 
-        if (
+        return self._find_versions_and_hash_of_existing_file(file_path=file_path) != (
             hdl_registers_version,
             self.__version__,
             self.register_list.object_hash,
-        ) != self._find_versions_and_hash_of_existing_file(file_path=output_file):
-            return True
-
-        return False
+        )
 
     def _find_versions_and_hash_of_existing_file(
         self, file_path: Path
-    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    ) -> tuple[str | None, str | None, str | None]:
         """
         Returns the matching strings in a tuple. Either field can be ``None`` if nothing found.
         """
@@ -238,10 +267,8 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
 
         # This is either the very first line of the file, or starting on a new line.
         package_version_re = re.compile(
-            (
-                rf"(^|\n){self.COMMENT_START} This file is automatically generated by "
-                rf"hdl-registers version (\S+)\.{self.COMMENT_END}\n"
-            )
+            rf"(^|\n){self.COMMENT_START} This file is automatically generated by "
+            rf"hdl-registers version (\S+)\.{self.COMMENT_END}\n"
         )
         package_version_match = package_version_re.search(existing_file_content)
         if package_version_match:
@@ -270,7 +297,9 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
         Get file header informing the user that the file is automatically generated.
         Basically the information from :meth:`.generated_source_info` formatted as a comment block.
         """
-        return self.comment_block(text=self.generated_source_info, indent=0)
+        generated_source_info = self.comment_block(text=self.generated_source_info, indent=0)
+        separator_line = self.get_separator_line(indent=0)
+        return f"{separator_line}{generated_source_info}{separator_line}"
 
     @property
     def generated_source_info(self) -> list[str]:
@@ -278,31 +307,54 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
         Return lines informing the user that the file is automatically generated.
         Containing info about the source of the generated register information.
         """
-        # Default: Get git SHA from the user's current working directory.
-        directory = Path(".")
+        return self._get_generated_source_info(use_rst_annotation=False)
 
-        time_info = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    def _get_generated_source_info(self, use_rst_annotation: bool) -> list[str]:
+        """
+        Lines with info about the automatically generated file.
+        """
+        # Default: Get git SHA from the user's current working directory.
+        directory = Path.cwd()
+
+        # This call will more or less guess the user's timezone.
+        # In a general use case this is not reliable, hence the rule, but in our case
+        # the date information is not critical in any way.
+        # It is just there for extra info.
+        # https://docs.astral.sh/ruff/rules/call-datetime-now-without-tzinfo/
+        time_info = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")  # noqa: DTZ005
+
+        annotation = "``" if use_rst_annotation else ""
 
         file_info = ""
         if self.register_list.source_definition_file is not None:
             # If the source definition file does exist, get git SHA from that directory instead.
             directory = self.register_list.source_definition_file.parent
-            file_info = f" from file {self.register_list.source_definition_file.name}"
+
+            file_name = f"{annotation}{self.register_list.source_definition_file.name}{annotation}"
+            file_info = f" from file {file_name}"
 
         commit_info = ""
         if git_commands_are_available(directory=directory):
-            commit_info = f" at commit {get_git_commit(directory=directory)}"
+            git_commit = get_git_commit(directory=directory, use_rst_annotation=use_rst_annotation)
+            commit_info = f" at Git commit {git_commit}"
         elif svn_commands_are_available(cwd=directory):
-            commit_info = f" at revision {get_svn_revision_information(cwd=directory)}"
+            svn_revision = get_svn_revision_information(
+                cwd=directory, use_rst_annotation=use_rst_annotation
+            )
+            commit_info = f" at SVN revision {svn_revision}"
 
         info = f"Generated {time_info}{file_info}{commit_info}."
 
+        name_link = (
+            "`hdl-registers <https://hdl-registers.com>`_"
+            if use_rst_annotation
+            else "hdl-registers"
+        )
+
         return [
-            (
-                "This file is automatically generated by hdl-registers "
-                f"version {hdl_registers_version}."
-            ),
-            f"Code generator {self.__class__.__name__} version {self.__version__}.",
+            f"This file is automatically generated by {name_link} version {hdl_registers_version}.",
+            f"Code generator {annotation}{self.__class__.__name__}{annotation} "
+            f"version {self.__version__}.",
             info,
             f"Register hash {self.register_list.object_hash}.",
         ]
@@ -315,7 +367,7 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
         In general, the user will know if these errors are present when the generated code is
         compiled/used since it will probably crash.
         But it is better to warn early, rather than the user finding out when compiling headers
-        after a 1 hour FPGA build.
+        after a 1-hour FPGA build.
 
         We run this check at creation time, always and for every single generator.
         Hence the user will hopefully get warned when they generate e.g. a VHDL package at the start
@@ -354,6 +406,10 @@ class RegisterCodeGenerator(ABC, RegisterCodeGeneratorHelpers):
 
             for field in register.fields:
                 check(name=field.name, description="Field")
+
+                if isinstance(field, Enumeration):
+                    for element in field.elements:
+                        check(name=element.name, description="Enumeration element")
 
         for register_array in self.iterate_register_arrays():
             check(name=register_array.name, description="Register array")

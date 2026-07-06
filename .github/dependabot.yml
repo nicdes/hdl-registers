@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/hdl_registers"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    labels:
+      - Dependencies
+    reviewers:
+      - LukasVik
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    labels:
+      - Dependencies
+    reviewers:
+      - LukasVik

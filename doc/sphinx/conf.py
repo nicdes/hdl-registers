@@ -11,7 +11,6 @@
 Configuration file for the Sphinx documentation builder.
 """
 
-# Standard libraries
 import sys
 from pathlib import Path
 
@@ -19,10 +18,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 sys.path.insert(0, str(REPO_ROOT))
 
-# Import before others since it modifies PYTHONPATH. pylint: disable=unused-import
+# Import before others since it modifies PYTHONPATH.
 import tools.tools_pythonpath  # noqa: F401
 
-# First party libraries
 from hdl_registers.about import WEBSITE_URL
 
 project = "hdl-registers"
@@ -35,6 +33,7 @@ extensions = [
     "sphinx_toolbox.collapse",
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
+    "sphinxcontrib.googleanalytics",
     "sphinxext.opengraph",
 ]
 
@@ -59,7 +58,6 @@ html_theme = "sphinx_rtd_theme"
 
 html_theme_options = {
     "prev_next_buttons_location": "both",
-    "analytics_id": "G-GN3TVQGSHC",
     "logo_only": True,
 }
 
@@ -77,9 +75,15 @@ html_css_files = [
     "docutils_table_caption_below.css",
 ]
 
+# Google Analytics settings.
+googleanalytics_id = "G-GN3TVQGSHC"
+
 # OpenGraph settings.
 ogp_site_url = WEBSITE_URL
 ogp_image = "_static/social_media_preview.png"
+
+# Avoid "Git clone too shallow" warning that has occurred in CI.
+suppress_warnings = ["git.too_shallow"]
 
 
 # Make autodoc include __init__ class method.

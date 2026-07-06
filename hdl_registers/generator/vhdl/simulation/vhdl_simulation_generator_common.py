@@ -7,14 +7,13 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
-from typing import TYPE_CHECKING, Optional
+from __future__ import annotations
 
-# First party libraries
+from typing import TYPE_CHECKING
+
 from hdl_registers.generator.vhdl.vhdl_generator_common import VhdlGeneratorCommon
 
 if TYPE_CHECKING:
-    # First party libraries
     from hdl_registers.register import Register
     from hdl_registers.register_array import RegisterArray
 
@@ -24,7 +23,7 @@ class VhdlSimulationGeneratorCommon(VhdlGeneratorCommon):
     Common methods for generation of VHDL simulation code.
     """
 
-    def get_array_index_port(self, register_array: Optional["RegisterArray"]) -> str:
+    def get_array_index_port(self, register_array: RegisterArray | None) -> str:
         """
         Get the array index port declaration.
         Suitable for VHDL procedure/function signatures that can read registers in arrays.
@@ -36,7 +35,7 @@ class VhdlSimulationGeneratorCommon(VhdlGeneratorCommon):
         return ""
 
     @staticmethod
-    def get_array_index_association(register_array: Optional["RegisterArray"]) -> str:
+    def get_array_index_association(register_array: RegisterArray | None) -> str:
         """
         Get the array index association.
         Suitable when associating the array index port to a read/write procedure call.
@@ -47,7 +46,7 @@ class VhdlSimulationGeneratorCommon(VhdlGeneratorCommon):
         return ""
 
     def reg_index_constant(
-        self, register: "Register", register_array: Optional["RegisterArray"] = None
+        self, register: Register, register_array: RegisterArray | None = None
     ) -> str:
         """
         Get a 'reg_index' constant declaration, for the index of the supplied register.
@@ -63,7 +62,7 @@ class VhdlSimulationGeneratorCommon(VhdlGeneratorCommon):
             f"{register_name}(array_index=>array_index)" if register_array else register_name
         )
 
-        return f"    constant reg_index : {self.name}_reg_range := {reg_index};\n"
+        return f"    constant reg_index : {self.name}_register_range := {reg_index};\n"
 
     @staticmethod
     def reg_address_constant() -> str:
@@ -74,14 +73,12 @@ class VhdlSimulationGeneratorCommon(VhdlGeneratorCommon):
         Is suitable for implementation of register/field access procedures.
         """
         return (
-            "    constant reg_address : addr_t := base_address + "
-            "to_unsigned(4 * reg_index, addr_width);\n"
+            "    constant reg_address : unsigned(32 - 1 downto 0) := base_address + "
+            "to_unsigned(4 * reg_index, 32);\n"
         )
 
     @staticmethod
-    def get_register_array_message(
-        register_array: Optional["RegisterArray"],
-    ) -> str:
+    def get_register_array_message(register_array: RegisterArray | None) -> str:
         """
         Status message for register array information.
         Suitable for error printouts.

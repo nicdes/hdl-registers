@@ -7,17 +7,14 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
 import contextlib
 import io
 from pathlib import Path
 from unittest.mock import PropertyMock, patch
 
-# Third party libraries
 import pytest
 from tsfpga.system_utils import create_directory, create_file
 
-# First party libraries
 from hdl_registers import __version__ as hdl_registers_version
 from hdl_registers.generator.register_code_generator import RegisterCodeGenerator
 from hdl_registers.parser.toml import from_toml
@@ -34,11 +31,11 @@ class CustomGenerator(RegisterCodeGenerator):
     def output_file(self):
         return self.output_folder / f"{self.name}.x"
 
-    def get_code(self, before_header="", **kwargs) -> str:
-        return f"""\
-{before_header}{self.header}
-Nothing else, its a stupid generator.
-"""
+    def get_code(
+        self,
+        **kwargs,  # noqa: ARG002
+    ) -> str:
+        return "Nothing, its a stupid generator."
 
 
 @pytest.fixture
@@ -61,10 +58,6 @@ description = "My register"
         return CustomGenerator(register_list=register_list, output_folder=tmp_path)
 
     return get
-
-
-# False positive for pytest fixtures
-# pylint: disable=redefined-outer-name
 
 
 def test_create_return_value(generator_from_toml):
@@ -156,9 +149,12 @@ def test_create_should_run_again_if_package_version_is_changed(generator_from_to
     generator = generator_from_toml()
     generator.create_if_needed()
 
-    with patch(f"{__name__}.CustomGenerator.create", autospec=True) as mocked_create, patch(
-        "hdl_registers.generator.register_code_generator.hdl_registers_version", autospec=True
-    ) as _:
+    with (
+        patch(f"{__name__}.CustomGenerator.create", autospec=True) as mocked_create,
+        patch(
+            "hdl_registers.generator.register_code_generator.hdl_registers_version", autospec=True
+        ) as _,
+    ):
         generator.create_if_needed()
         mocked_create.assert_called_once()
 
@@ -167,28 +163,16 @@ def test_create_should_run_again_if_generator_version_is_changed(generator_from_
     generator = generator_from_toml()
     generator.create_if_needed()
 
-    with patch(f"{__name__}.CustomGenerator.create", autospec=True) as mocked_create, patch(
-        f"{__name__}.CustomGenerator.__version__", new_callable=PropertyMock
-    ) as mocked_generator_version:
+    with (
+        patch(f"{__name__}.CustomGenerator.create", autospec=True) as mocked_create,
+        patch(
+            f"{__name__}.CustomGenerator.__version__", new_callable=PropertyMock
+        ) as mocked_generator_version,
+    ):
         mocked_generator_version.return_value = "4.0.0"
 
         generator.create_if_needed()
         mocked_create.assert_called_once()
-
-
-def test_version_header_is_detected_even_if_not_on_first_line(generator_from_toml):
-    before_header = """
-# #########################
-# Another header
-# #########################
-"""
-    generator = generator_from_toml()
-    generator.create_if_needed(before_header=before_header)
-
-    generator = generator_from_toml()
-    with patch(f"{__name__}.CustomGenerator.create", autospec=True) as mocked_create:
-        generator.create_if_needed(before_header=before_header)
-        mocked_create.assert_not_called()
 
 
 @patch("hdl_registers.generator.register_code_generator.git_commands_are_available", autospec=True)
@@ -221,7 +205,7 @@ def test_generated_source_info(
 
     assert got[0] == expected_first_line
     assert got[1] == expected_second_line
-    assert " from file regs.toml at commit GIT_SHA." in got[2]
+    assert " from file regs.toml at Git commit GIT_SHA." in got[2]
     assert got[3] == "Register hash REGISTER_SHA."
 
     # Test with SVN information
@@ -232,7 +216,7 @@ def test_generated_source_info(
     got = CustomGenerator(register_list=register_list, output_folder=None).generated_source_info
     assert got[0] == expected_first_line
     assert got[1] == expected_second_line
-    assert " from file regs.toml at revision REVISION." in got[2]
+    assert " from file regs.toml at SVN revision REVISION." in got[2]
     assert got[3] == "Register hash REGISTER_SHA."
 
     # Test with no source definition file
@@ -242,7 +226,7 @@ def test_generated_source_info(
     assert got[0] == expected_first_line
     assert got[1] == expected_second_line
     assert "from file" not in got[2]
-    assert " at revision REVISION." in got[2]
+    assert " at SVN revision REVISION." in got[2]
     assert got[3] == "Register hash REGISTER_SHA."
 
 
@@ -353,6 +337,25 @@ data.for.type = "bit"
     assert (
         str(exception_info.value)
         == 'Error in register list "sensor": Field name "for" is a reserved keyword.'
+    )
+
+
+def test_enumeration_field_element_with_reserved_name_should_raise_exception(generator_from_toml):
+    generator = generator_from_toml(
+        """
+[test]
+
+mode = "r_w"
+
+apa.type = "enumeration"
+apa.element.okay_name = ""
+apa.element.signed = ""
+""",
+    )
+    with pytest.raises(ValueError) as exception_info:
+        generator.create_if_needed()
+    assert str(exception_info.value) == (
+        'Error in register list "sensor": Enumeration element name "signed" is a reserved keyword.'
     )
 
 
@@ -524,7 +527,17 @@ def test_relative_path_printout(tmp_path, monkeypatch):
         generator.create()
         stdout = string_io.getvalue()
 
+    # Prints one sub-folder.
     assert f"file: {Path('out') / 'test.x'}" in stdout
+
+    string_io = io.StringIO()
+    with contextlib.redirect_stdout(string_io):
+        monkeypatch.chdir(tmp_path.parent)
+        generator.create()
+        stdout = string_io.getvalue()
+
+    # Prints multiple sub-folders.
+    assert f"file: {Path(tmp_path.name) / 'out' / 'test.x'}" in stdout
 
     string_io = io.StringIO()
     with contextlib.redirect_stdout(string_io):
@@ -533,12 +546,5 @@ def test_relative_path_printout(tmp_path, monkeypatch):
         generator.create()
         stdout = string_io.getvalue()
 
-    assert f"file: {Path('..') / 'out' / 'test.x'}" in stdout
-
-    string_io = io.StringIO()
-    with contextlib.redirect_stdout(string_io):
-        monkeypatch.chdir(tmp_path.parent)
-        generator.create()
-        stdout = string_io.getvalue()
-
-    assert f"file: {Path(tmp_path.name) / 'out' / 'test.x'}" in stdout
+    # Prints full path since the output is not inside the CWD.
+    assert f"file: {tmp_path / 'out' / 'test.x'}" in stdout

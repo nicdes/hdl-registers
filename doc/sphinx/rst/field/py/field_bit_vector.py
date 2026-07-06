@@ -7,11 +7,9 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
 import sys
 from pathlib import Path
 
-# First party libraries
 from hdl_registers.generator.c.header import CHeaderGenerator
 from hdl_registers.generator.cpp.implementation import CppImplementationGenerator
 from hdl_registers.generator.cpp.interface import CppInterfaceGenerator
@@ -39,7 +37,7 @@ def create_from_api() -> RegisterList:
     register_list = RegisterList(name="caesar")
 
     register = register_list.append_register(
-        name="config", mode=REGISTER_MODES["r_w"], description="Configuration register."
+        name="conf", mode=REGISTER_MODES["r_w"], description="Configuration register."
     )
 
     register.append_bit_vector(
@@ -53,13 +51,20 @@ def create_from_api() -> RegisterList:
         name="tid",
         description="Value to set for **TID** in the data stream.",
         width=8,
-        default_value="00000000",
+        default_value=0xF3,
+    )
+
+    register.append_bit_vector(
+        name="tdest",
+        description="Value to set for **TDEST** in the data stream.",
+        width=3,
+        default_value=0,
     )
 
     return register_list
 
 
-def generate(register_list: RegisterList, output_folder: Path):
+def generate(register_list: RegisterList, output_folder: Path) -> None:
     """
     Generate the artifacts that we are interested in.
     """
@@ -74,7 +79,7 @@ def generate(register_list: RegisterList, output_folder: Path):
     VhdlRecordPackageGenerator(register_list=register_list, output_folder=output_folder).create()
 
 
-def main(output_folder: Path):
+def main(output_folder: Path) -> None:
     generate(register_list=parse_toml(), output_folder=output_folder / "toml")
     generate(register_list=create_from_api(), output_folder=output_folder / "api")
 

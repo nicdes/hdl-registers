@@ -51,7 +51,8 @@ You choose yourself which method you want to use in your code base.
    :linenos:
    :lines: 10-
 
-See :meth:`.Register.append_enumeration` for more Python API details.
+See :meth:`.Register.append_enumeration` and the :class:`.Enumeration` class
+for more Python API details.
 
 
 Generated code
@@ -127,7 +128,7 @@ In our VHDL code we can access a field value for example like this:
   elsif regs_down.config.packet_source = packet_source_dma then
     result_valid <= job_valid;
   else
-    -- packet_source_none
+    -- packet_source_disabled
     result_valid <= '0';
   end if;
 

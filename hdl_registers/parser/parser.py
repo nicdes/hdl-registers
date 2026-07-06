@@ -7,40 +7,69 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
+from __future__ import annotations
+
 import copy
 import json
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from enum import Enum
+from typing import TYPE_CHECKING, Any, ClassVar
 
-# Third party libraries
 import tomli_w
 import yaml
 from tsfpga import DEFAULT_FILE_ENCODING
 
-# First party libraries
 from hdl_registers.about import WEBSITE_URL
 from hdl_registers.constant.bit_vector_constant import UnsignedVector
+from hdl_registers.field.numerical_interpretation import (
+    Signed,
+    SignedFixedPoint,
+    Unsigned,
+    UnsignedFixedPoint,
+)
 from hdl_registers.register_list import RegisterList
 from hdl_registers.register_modes import REGISTER_MODES
 
 if TYPE_CHECKING:
-    # First party libraries
+    from pathlib import Path
+
     from hdl_registers.register import Register
     from hdl_registers.register_mode import RegisterMode
 
 
 class RegisterParser:
+    """
+    Parse register data in the form of a dictionary into a :class:`.RegisterList` object.
+    See :ref:`toml_format` for further documentation.
+
+    A note on sanity check strategy:
+    The parser performs only the basic sanity checks related to the data file format.
+    For example, missing properties, unknown properties, etc.
+    A lot of other sanity checks are performed in the :class:`.Register`, :class:`.RegisterArray`,
+    :class:`.RegisterField`, etc, classes themselves.
+
+    For example, the default value of a bit field should be a string with the value "0" or "1".
+    This is checked in the constructor of the :class:`.Bit` class, not here in the parser.
+    Similar for a lot of other things.
+
+    This is because these objects can be created from the Python API also, without involving
+    the parser.
+    Hence these sanity checks have to be present there.
+    Having them also in the parser would enable better error messages, but would be redundant
+    and would slow down the parser.
+    Since the parser is run in real time, the performance is critical, and we can not afford
+    to slow it down.
+    """
+
     # Attributes of the constant.
-    recognized_constant_items = {"type", "value", "description", "data_type"}
-    # Note that "type" being present is implied. We would not be parsing a constant unless we
-    # know it to be a "constant" type.
+    recognized_constant_items: ClassVar = {"type", "value", "description", "data_type"}
+    # Note that "type" being present is implied.
+    # We would not be parsing a constant unless "type" equal to "constant" was seen.
     # So we save some CPU cycles by not checking for it.
-    required_constant_items = ["value"]
+    required_constant_items: ClassVar = ["value"]
 
     # Attributes of the register.
     # Anything apart from these are names of fields.
-    default_register_items = {
+    default_register_items: ClassVar = {
         "type",
         "mode",
         "description",
@@ -52,46 +81,66 @@ class RegisterParser:
 
     # Attributes of the register array.
     # Anything apart from these are names of registers.
-    default_register_array_items = {"type", "array_length", "description"}
+    default_register_array_items: ClassVar = {"type", "array_length", "description"}
     # Note that "type" being present is implied.
-    # We would not be parsing a register array unless we know it to be a "register_array" type.
+    # We would not be parsing a register array unless "type" equal to "register_array" was seen.
     # So we save some CPU cycles by not checking for it.
-    required_register_array_items = ["array_length"]
+    required_register_array_items: ClassVar = ["array_length"]
 
     # Attributes of the "bit" register field.
-    recognized_bit_items = {"type", "description", "default_value"}
+    recognized_bit_items: ClassVar = {"type", "description", "default_value"}
     # Note that "type" being present is implied.
-    # We would not be parsing a bit unless we know it to be a "bit" type.
+    # We would not be parsing a bit unless "type" equal to "bit" was seen.
     # So we save some CPU cycles by not checking for it.
-    required_bit_items: list[str] = []
+    required_bit_items: ClassVar[list[str]] = []
 
     # Attributes of the "bit_vector" register field.
-    recognized_bit_vector_items = {"type", "description", "width", "default_value"}
+    recognized_bit_vector_items: ClassVar = {
+        "type",
+        "description",
+        "width",
+        "default_value",
+        "numerical_interpretation",
+        "min_bit_index",
+    }
     # Note that "type" being present is implied.
-    # We would not be parsing a bit_vector unless we know it to be a "bit_vector" type.
+    # We would not be parsing a bit vector unless "type" equal to "bit_vector" was seen.
     # So we save some CPU cycles by not checking for it.
-    required_bit_vector_items = ["width"]
+    required_bit_vector_items: ClassVar = ["width"]
+
+    # The "numerical_interpretation" property of a "bit_vector" field may take only these values.
+    class _RecognizedBitVectorNumericalInterpretationItems(Enum):
+        UNSIGNED = "unsigned"
+        SIGNED = "signed"
+        UNSIGNED_FIXED_POINT = "unsigned_fixed_point"
+        SIGNED_FIXED_POINT = "signed_fixed_point"
 
     # Attributes of the "enumeration" register field.
-    recognized_enumeration_items = {"type", "description", "default_value", "element"}
+    recognized_enumeration_items: ClassVar = {"type", "description", "default_value", "element"}
     # Note that "type" being present is implied.
-    # We would not be parsing a enumeration unless we know it to be a "enumeration" type.
+    # We would not be parsing an enumeration unless "type" equal to "enumeration" was seen.
     # So we save some CPU cycles by not checking for it.
-    required_enumeration_items = ["element"]
+    required_enumeration_items: ClassVar = ["element"]
 
     # Attributes of the "integer" register field.
-    recognized_integer_items = {"type", "description", "min_value", "max_value", "default_value"}
+    recognized_integer_items: ClassVar = {
+        "type",
+        "description",
+        "min_value",
+        "max_value",
+        "default_value",
+    }
     # Note that "type" being present is implied.
-    # We would not be parsing a integer unless we know it to be a "integer" type.
+    # We would not be parsing an integer unless "type" equal to "integer" was seen.
     # So we save some CPU cycles by not checking for it.
-    required_integer_items = ["max_value"]
+    required_integer_items: ClassVar = ["max_value"]
 
     def __init__(
         self,
         name: str,
         source_definition_file: Path,
-        default_registers: Optional[list["Register"]] = None,
-    ):
+        default_registers: list[Register] | None = None,
+    ) -> None:
         """
         Arguments:
             name: The name of the register list.
@@ -108,12 +157,7 @@ class RegisterParser:
         self._default_register_names = []
         if default_registers:
             # Perform deep copy of the mutable register objects.
-            # Ignore a mypy error that seems buggy.
-            # We are assigning list[Register] to list[Register | RegisterArray]
-            # which should be absolutely fine, but mypy warns.
-            self._register_list.register_objects = copy.deepcopy(
-                default_registers  # type: ignore[arg-type]
-            )
+            self._register_list.register_objects = copy.deepcopy(default_registers)
             for register in default_registers:
                 self._default_register_names.append(register.name)
 
@@ -123,6 +167,8 @@ class RegisterParser:
 
         Arguments:
             register_data: Register data as a dictionary.
+                Preferably read by the :func:`.from_toml`, :func:`.from_json` or
+                :func:`.from_yaml` functions.
 
         Return:
             The resulting register list.
@@ -138,7 +184,7 @@ class RegisterParser:
                 print(
                     f"""
 ERROR: Parsing register data that appears to be in the old pre-6.0.0 format.
-ERROR: For more information, see: {WEBSITE_URL}/rst/basic_feature/basic_feature_register_modes.html
+ERROR: For more information, see: {WEBSITE_URL}/rst/about/new_data_file_format.html
 ERROR: Your data will be automatically converted to the new format and saved to: {output_file}
 ERROR: Please inspect that file and update your data file to the new format.
 """
@@ -158,7 +204,10 @@ ERROR: Please inspect that file and update your data file to the new format.
                     f"Error while parsing {self._source_definition_file}: "
                     f'Got unknown top-level property "{top_level_name}".'
                 )
-                raise ValueError(message)
+                # Seems to the linter like a type error, but it is actually the user specifying
+                # a property/value that they shouldn't.
+                # Corresponds better to a 'ValueError' than a 'TypeError'.
+                raise ValueError(message)  # noqa: TRY004
 
             top_level_type = top_level_items.get("type", "register")
 
@@ -183,7 +232,7 @@ ERROR: Please inspect that file and update your data file to the new format.
                 )
                 raise ValueError(message)
 
-        for item_name in items.keys():
+        for item_name in items:
             if item_name not in self.recognized_constant_items:
                 message = (
                     f'Error while parsing constant "{name}" in {self._source_definition_file}: '
@@ -248,7 +297,7 @@ ERROR: Please inspect that file and update your data file to the new format.
 
         self._parse_register_fields(register=register, register_items=items, register_array_note="")
 
-    def _get_mode(self, mode_name: str, register_name: str) -> "RegisterMode":
+    def _get_mode(self, mode_name: str, register_name: str) -> RegisterMode:
         if mode_name in REGISTER_MODES:
             return REGISTER_MODES[mode_name]
 
@@ -262,7 +311,7 @@ ERROR: Please inspect that file and update your data file to the new format.
     def _parse_register_fields(
         self,
         register_items: dict[str, Any],
-        register: "Register",
+        register: Register,
         register_array_note: str,
     ) -> None:
         # Add any fields that are specified.
@@ -277,7 +326,10 @@ ERROR: Please inspect that file and update your data file to the new format.
                     f"in {self._source_definition_file}: "
                     f'Got unknown property "{item_name}".'
                 )
-                raise ValueError(message)
+                # Seems to the linter like a type error, but it is actually the user specifying
+                # a property/value that they shouldn't.
+                # Corresponds better to a 'ValueError' than a 'TypeError'.
+                raise ValueError(message)  # noqa: TRY004
 
             if "type" not in item_value:
                 message = (
@@ -306,7 +358,10 @@ ERROR: Please inspect that file and update your data file to the new format.
                 raise ValueError(message)
 
             parser_methods[field_type](
-                register=register, field_name=item_name, field_items=item_value
+                register=register,
+                field_name=item_name,
+                field_items=item_value,
+                register_array_note=register_array_note,
             )
 
     def _parse_register_array(self, name: str, items: dict[str, Any]) -> None:
@@ -340,7 +395,10 @@ ERROR: Please inspect that file and update your data file to the new format.
                     f"{self._source_definition_file}: "
                     f'Got unknown property "{item_name}".'
                 )
-                raise ValueError(message)
+                # Seems to the linter like a type error, but it is actually the user specifying
+                # a property/value that they shouldn't.
+                # Corresponds better to a 'ValueError' than a 'TypeError'.
+                raise ValueError(message)  # noqa: TRY004
 
             item_type = item_value.get("type", "register")
             if item_type != "register":
@@ -387,6 +445,7 @@ ERROR: Please inspect that file and update your data file to the new format.
         field_items: dict[str, Any],
         recognized_items: set[str],
         required_items: list[str],
+        register_array_note: str,
     ) -> None:
         """
         Will raise exception if anything is wrong.
@@ -394,23 +453,27 @@ ERROR: Please inspect that file and update your data file to the new format.
         for item_name in required_items:
             if item_name not in field_items:
                 message = (
-                    f'Error while parsing field "{field_name}" in register "{register_name}" in '
-                    f"{self._source_definition_file}: "
+                    f'Error while parsing field "{field_name}" in register '
+                    f'"{register_name}"{register_array_note} in {self._source_definition_file}: '
                     f'Missing required property "{item_name}".'
                 )
                 raise ValueError(message)
 
-        for item_name in field_items.keys():
+        for item_name in field_items:
             if item_name not in recognized_items:
                 message = (
                     f'Error while parsing field "{field_name}" in register '
-                    f'"{register_name}" in {self._source_definition_file}: '
+                    f'"{register_name}"{register_array_note} in {self._source_definition_file}: '
                     f'Unknown property "{item_name}".'
                 )
                 raise ValueError(message)
 
     def _parse_bit(
-        self, register: "Register", field_name: str, field_items: dict[str, Any]
+        self,
+        register: Register,
+        field_name: str,
+        field_items: dict[str, Any],
+        register_array_note: str,
     ) -> None:
         self._check_field_items(
             register_name=register.name,
@@ -418,6 +481,7 @@ ERROR: Please inspect that file and update your data file to the new format.
             field_items=field_items,
             recognized_items=self.recognized_bit_items,
             required_items=self.required_bit_items,
+            register_array_note=register_array_note,
         )
 
         description = field_items.get("description", "")
@@ -426,7 +490,11 @@ ERROR: Please inspect that file and update your data file to the new format.
         register.append_bit(name=field_name, description=description, default_value=default_value)
 
     def _parse_bit_vector(
-        self, register: "Register", field_name: str, field_items: dict[str, Any]
+        self,
+        register: Register,
+        field_name: str,
+        field_items: dict[str, Any],
+        register_array_note: str,
     ) -> None:
         self._check_field_items(
             register_name=register.name,
@@ -434,19 +502,61 @@ ERROR: Please inspect that file and update your data file to the new format.
             field_items=field_items,
             recognized_items=self.recognized_bit_vector_items,
             required_items=self.required_bit_vector_items,
+            register_array_note=register_array_note,
         )
 
         width = field_items["width"]
 
         description = field_items.get("description", "")
-        default_value = field_items.get("default_value", "0" * width)
+        default_value = field_items.get("default_value", 0)
+
+        min_bit_index = field_items.get("min_bit_index", 0)
+        max_bit_index = min_bit_index + width - 1
+
+        numerical_interpretation_str = field_items.get("numerical_interpretation", "unsigned")
+        match numerical_interpretation_str:
+            case self._RecognizedBitVectorNumericalInterpretationItems.UNSIGNED.value:
+                numerical_interpretation = Unsigned(bit_width=width)
+            case self._RecognizedBitVectorNumericalInterpretationItems.SIGNED.value:
+                numerical_interpretation = Signed(bit_width=width)
+            case self._RecognizedBitVectorNumericalInterpretationItems.UNSIGNED_FIXED_POINT.value:
+                numerical_interpretation = UnsignedFixedPoint(
+                    max_bit_index=max_bit_index, min_bit_index=min_bit_index
+                )
+            case self._RecognizedBitVectorNumericalInterpretationItems.SIGNED_FIXED_POINT.value:
+                numerical_interpretation = SignedFixedPoint(
+                    max_bit_index=max_bit_index, min_bit_index=min_bit_index
+                )
+            case _:
+                valid_interpretations_str = ", ".join(
+                    [
+                        f'"{interpretation.value}"'
+                        for interpretation in self._RecognizedBitVectorNumericalInterpretationItems
+                    ]
+                )
+                message = (
+                    f'Error while parsing field "{field_name}" in register '
+                    f'"{register.name}" in {self._source_definition_file}: '
+                    f'Unknown value "{numerical_interpretation_str}" for '
+                    'property "numerical_interpretation". '
+                    f"Expected one of {valid_interpretations_str}."
+                )
+                raise ValueError(message)
 
         register.append_bit_vector(
-            name=field_name, description=description, width=width, default_value=default_value
+            name=field_name,
+            description=description,
+            width=width,
+            default_value=default_value,
+            numerical_interpretation=numerical_interpretation,
         )
 
     def _parse_enumeration(
-        self, register: "Register", field_name: str, field_items: dict[str, Any]
+        self,
+        register: Register,
+        field_name: str,
+        field_items: dict[str, Any],
+        register_array_note: str,
     ) -> None:
         self._check_field_items(
             register_name=register.name,
@@ -460,17 +570,18 @@ ERROR: Please inspect that file and update your data file to the new format.
             # However, this particular check is needed here also since the logic for default
             # value below does not work if there are no elements.
             required_items=self.required_enumeration_items,
+            register_array_note=register_array_note,
         )
 
         description = field_items.get("description", "")
         # We assert above that the enumeration has at least one element.
-        # Meaning that the result of this get can not be None, as mypy thinks.
-        elements: dict[str, str] = field_items.get("element")  # type: ignore[assignment]
+        # Meaning that the result of this get can not be None.
+        elements: dict[str, str] = field_items.get("element")
 
         # The default "default value" is the first declared enumeration element.
         # Note that this works because dictionaries in Python are guaranteed ordered since
         # Python 3.7.
-        default_value = field_items.get("default_value", list(elements)[0])
+        default_value = field_items.get("default_value", next(iter(elements)))
 
         register.append_enumeration(
             name=field_name,
@@ -480,7 +591,11 @@ ERROR: Please inspect that file and update your data file to the new format.
         )
 
     def _parse_integer(
-        self, register: "Register", field_name: str, field_items: dict[str, Any]
+        self,
+        register: Register,
+        field_name: str,
+        field_items: dict[str, Any],
+        register_array_note: str,
     ) -> None:
         self._check_field_items(
             register_name=register.name,
@@ -488,6 +603,7 @@ ERROR: Please inspect that file and update your data file to the new format.
             field_items=field_items,
             recognized_items=self.recognized_integer_items,
             required_items=self.required_integer_items,
+            register_array_note=register_array_note,
         )
 
         max_value = field_items["max_value"]
@@ -505,15 +621,16 @@ ERROR: Please inspect that file and update your data file to the new format.
         )
 
 
-def _convert_to_new_format(  # pylint: disable=too-many-locals
-    old_data: dict[str, Any]
+def _convert_to_new_format(  # noqa: C901
+    old_data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Convert pre-6.0.0 format to the new format.
+    This is a semi-trash function that will be removed in the future.
     """
 
     def _get_register_dict(register_items: dict[str, Any]) -> dict[str, Any]:
-        register_dict = dict()
+        register_dict = {}
 
         for register_item_name, register_item_value in register_items.items():
             if register_item_name in RegisterParser.default_register_items:
@@ -521,22 +638,19 @@ def _convert_to_new_format(  # pylint: disable=too-many-locals
 
             elif register_item_name in ["bit", "bit_vector", "enumeration", "integer"]:
                 for field_name, field_items in register_item_value.items():
-                    field_dict = dict(type=register_item_name)
-
-                    for field_item_name, field_item_value in field_items.items():
-                        field_dict[field_item_name] = field_item_value
+                    field_dict = {"type": register_item_name}
+                    field_dict.update(dict(field_items.items()))
 
                     register_dict[field_name] = field_dict
 
             else:
                 raise ValueError(
-                    f"Unknown item {register_item_name}. "
-                    "Looks like an error in the user data file."
+                    f"Unknown item {register_item_name}. Looks like an error in the user data file."
                 )
 
         return register_dict
 
-    result = dict()
+    result = {}
 
     def _add_item(name: str, items: dict[str, Any]) -> None:
         if name in result:
@@ -551,7 +665,7 @@ def _convert_to_new_format(  # pylint: disable=too-many-locals
 
     if "register_array" in old_data:
         for register_array_name, register_array_items in old_data["register_array"].items():
-            register_array_dict: dict[str, Any] = dict(type="register_array")
+            register_array_dict: dict[str, Any] = {"type": "register_array"}
 
             for register_array_item_name, register_array_item_value in register_array_items.items():
                 if register_array_item_name in RegisterParser.default_register_array_items:
@@ -573,10 +687,8 @@ def _convert_to_new_format(  # pylint: disable=too-many-locals
 
     if "constant" in old_data:
         for constant_name, constant_items in old_data["constant"].items():
-            constant_dict = dict(type="constant")
-
-            for constant_item_name, constant_item_value in constant_items.items():
-                constant_dict[constant_item_name] = constant_item_value
+            constant_dict = {"type": "constant"}
+            constant_dict.update(dict(constant_items.items()))
 
             _add_item(name=constant_name, items=constant_dict)
 
@@ -590,19 +702,19 @@ def _save_to_new_format(old_data: dict[str, Any], output_file: Path) -> None:
     new_data = _convert_to_new_format(old_data=old_data)
 
     if output_file.suffix == ".toml":
-        with open(output_file, "wb") as file_handle:
+        with output_file.open("wb") as file_handle:
             tomli_w.dump(new_data, file_handle, multiline_strings=True)
 
         return
 
     if output_file.suffix == ".json":
-        with open(output_file, "w", encoding=DEFAULT_FILE_ENCODING) as file_handle:
+        with output_file.open("w", encoding=DEFAULT_FILE_ENCODING) as file_handle:
             json.dump(new_data, file_handle, indent=4)
 
         return
 
     if output_file.suffix == ".yaml":
-        with open(output_file, "w", encoding=DEFAULT_FILE_ENCODING) as file_handle:
+        with output_file.open("w", encoding=DEFAULT_FILE_ENCODING) as file_handle:
             yaml.dump(new_data, file_handle)
 
         return

@@ -7,26 +7,23 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
-from typing import Optional
-
-# Local folder libraries
 from .constant import Constant
 
 
 class FloatConstant(Constant):
     """
     Represent a floating-point constant.
+    See :ref:`constant_float` for details.
 
     .. note::
 
       The ``value`` is stored with its native representation, which is a Python ``float``
-      if a decimal value is provided.
+      if a fractional value is provided.
       The Python ``float`` type is a double-precision value, so the precision in Python matches
       the precision in C/C++/VHDL generators.
     """
 
-    def __init__(self, name: str, value: float, description: Optional[str] = None):
+    def __init__(self, name: str, value: float, description: str = "") -> None:
         """
         Arguments:
             name: The name of the constant.
@@ -34,7 +31,7 @@ class FloatConstant(Constant):
             description: Textual description for the constant.
         """
         self.name = name
-        self.description = "" if description is None else description
+        self.description = description
 
         self._value = 0.0
         # Assign self._value via setter
@@ -53,7 +50,7 @@ class FloatConstant(Constant):
         Setter for value that performs sanity checks.
         """
         if not isinstance(value, float):
-            raise ValueError(
+            raise TypeError(
                 f'Constant "{self.name}" has invalid data type "{type(value)}". Value: "{value}".'
             )
 

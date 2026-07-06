@@ -7,11 +7,9 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
 import sys
 from pathlib import Path
 
-# First party libraries
 from hdl_registers.generator.register_code_generator import RegisterCodeGenerator
 from hdl_registers.register_list import RegisterList
 from hdl_registers.register_modes import REGISTER_MODES
@@ -36,7 +34,7 @@ class TxtRegisterListGenerator(RegisterCodeGenerator):
         """
         Generate a textual list of all registers and register arrays.
         """
-        txt = f'{self.header}\nAvailable registers in the "{self.name}" register list:\n\n'
+        txt = f'Available registers in the "{self.name}" register list:\n\n'
 
         for register, register_array in self.iterate_registers():
             if register_array:
@@ -49,13 +47,13 @@ class TxtRegisterListGenerator(RegisterCodeGenerator):
         return txt
 
 
-def main(output_folder: Path):
+def main(output_folder: Path) -> None:
     """
     Set up some registers and generate text file with our custom generator.
     """
     register_list = RegisterList(name="caesar")
 
-    register_list.append_register(name="config", mode=REGISTER_MODES["r_w"], description="")
+    register_list.append_register(name="conf", mode=REGISTER_MODES["r_w"], description="")
     register_list.append_register(name="status", mode=REGISTER_MODES["r"], description="")
     register_list.append_register(name="command", mode=REGISTER_MODES["wpulse"], description="")
 

@@ -12,11 +12,9 @@ Some limited unit tests that check the generated code.
 Note that the generated VHDL code is also simulated in a functional test.
 """
 
-# Third party libraries
 import pytest
 from tsfpga.system_utils import read_file
 
-# First party libraries
 from hdl_registers import HDL_REGISTERS_TESTS
 from hdl_registers.field.numerical_interpretation import (
     Signed,
@@ -30,27 +28,35 @@ from hdl_registers.register_list import RegisterList
 from hdl_registers.register_modes import REGISTER_MODES
 
 
-class RegisterConfiguration:
+def get_package(register_list, output_folder):
+    return read_file(VhdlRegisterPackageGenerator(register_list, output_folder).create())
+
+
+class RegisterConfigurationTest:
     def __init__(self, name, source_toml_file):
         self.register_list = from_toml(name=name, toml_file=source_toml_file)
 
         self.register_list.add_constant(name="boolean_constant", value=True, description="")
         self.register_list.add_constant(name="integer_constant", value=3, description="")
         self.register_list.add_constant(name="real_constant", value=3.14, description="")
+        self.register_list.add_constant(name="real_big_constant", value=1e20, description="")
+        self.register_list.add_constant(name="real_small_constant", value=4e-8, description="")
         self.register_list.add_constant(name="string_constant", value="apa", description="")
 
     def test_vhdl_package(self, output_path, test_registers, test_constants):
-        vhdl = read_file(VhdlRegisterPackageGenerator(self.register_list, output_path).create())
+        vhdl = get_package(register_list=self.register_list, output_folder=output_path)
 
         if test_registers:
-            assert "constant test_reg_map : " in vhdl, vhdl
+            assert "constant test_register_map : " in vhdl, vhdl
         else:
-            assert "constant test_reg_map : " not in vhdl, vhdl
+            assert "constant test_register_map : " not in vhdl, vhdl
 
         if test_constants:
             assert "constant test_constant_boolean_constant : boolean := true;" in vhdl, vhdl
             assert "constant test_constant_integer_constant : integer := 3;" in vhdl, vhdl
             assert "constant test_constant_real_constant : real := 3.14;" in vhdl, vhdl
+            assert "constant test_constant_real_big_constant : real := 1.0e+20;" in vhdl, vhdl
+            assert "constant test_constant_real_small_constant : real := 4.0e-08;" in vhdl, vhdl
             assert 'constant test_constant_string_constant : string := "apa";' in vhdl, vhdl
             assert (
                 "constant test_constant_base_address_hex : "
@@ -69,11 +75,7 @@ class RegisterConfiguration:
 
 @pytest.fixture
 def register_configuration():
-    return RegisterConfiguration("test", HDL_REGISTERS_TESTS / "regs_test.toml")
-
-
-# False positive for pytest fixtures
-# pylint: disable=redefined-outer-name
+    return RegisterConfigurationTest("test", HDL_REGISTERS_TESTS / "regs_test.toml")
 
 
 def test_vhdl_package_with_registers_and_constants(tmp_path, register_configuration):
@@ -92,7 +94,7 @@ def test_vhdl_package_with_constants_and_no_registers(tmp_path, register_configu
 
 def test_vhdl_package_with_only_one_register(tmp_path):
     """
-    Test that reg_map constant has valid VHDL syntax even when there is only one register.
+    Test that register_map constant has valid VHDL syntax even when there is only one register.
     """
     register_list = RegisterList(name="apa", source_definition_file=None)
     register_list.append_register(
@@ -101,8 +103,8 @@ def test_vhdl_package_with_only_one_register(tmp_path):
     vhdl = read_file(VhdlRegisterPackageGenerator(register_list, tmp_path).create())
 
     expected = """
-  constant apa_reg_map : reg_definition_vec_t(apa_reg_range) := (
-    0 => (idx => apa_hest, reg_type => r)
+  constant apa_register_map : register_definition_vec_t(apa_register_range) := (
+    0 => (index => apa_hest, mode => r, utilized_width => 32)
   );
 
   constant apa_regs_init : apa_regs_t := (
@@ -179,3 +181,27 @@ def test_vhdl_typedef(tmp_path):
     assert "subtype test_number_sfixed1_t is sfixed(5 downto 0);" in vhdl, vhdl
 
     assert "subtype test_number_integer0_t is integer range 1 to 3;" in vhdl, vhdl
+
+
+def test_address_width(tmp_path):
+    register_list = RegisterList(name="apa", source_definition_file=None)
+    constant_name = "apa_address_width"
+
+    def check(num_addressing_bits):
+        assert f"{constant_name} : positive := {num_addressing_bits + 2}" in get_package(
+            register_list, tmp_path
+        )
+
+    assert constant_name not in get_package(register_list, tmp_path)
+
+    register_list.append_register("a", REGISTER_MODES["r"], "")
+    check(1)
+
+    register_list.append_register("b", REGISTER_MODES["r"], "")
+    check(1)
+
+    register_list.append_register("c", REGISTER_MODES["r"], "")
+    check(2)
+
+    register_list.append_register_array("d", 2, "").append_register("e", REGISTER_MODES["r"], "")
+    check(3)

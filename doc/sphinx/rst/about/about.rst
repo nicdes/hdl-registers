@@ -19,16 +19,15 @@ While there have always been :ref:`other tools <similar_tools>` available, the a
 clear list of requirements that was not, and is not, fulfilled by any other project.
 
 1. Very fast.
-   So that HDL register code generation can be done automatically before each simulation or build,
+   So that HDL code generation can be done automatically before each simulation or build,
    not as a separate step.
 2. No hard-coded numbers done by hand.
    Everything should be calculated or inferred:
-   Register addresses, field bit indexes, integer/enumeration field widths,
-   enumeration element encodings, etc.
+   Register addresses, field bit indexes, integer/enumeration widths, enumeration encodings, etc.
 3. Bloat-free.
    Meaning, well-scoped and focused on the important features.
 4. Clean, intuitive, well-documented and easy-to-use API.
-5. Well-tested and reliable code.
+5. Well-tested and reliable.
 
 All of these, but especially points 1. and 2., set this project apart
 from :ref:`others <similar_tools>`.
@@ -47,24 +46,26 @@ Consider the following scenario: You are about to run a simulation in your FPGA 
 to make sure that all your register definitions are up to date.
 This scenario is very common, on a productive day it happens a hundred times.
 The table below compares how long that would take in a medium-sized FPGA project.
-It measures the time to parse and generate VHDL artifacts for 20 register lists with 20 registers
-and 50 fields each.
+It measures the time to parse and generate VHDL artifacts for 20 register lists with 16 registers
+and 32 fields.
 
 
 .. code-block:: none
 
   $ python3 tools/benchmark.py
-  --------------------------------------------------------------------------
-                         Tool | Execution time | Relative (lower is better)
-  ----------------------------+----------------+----------------------------
-    hdl-registers (5.1.1-dev) |        17.5 ms | 1x (baseline)
-             cheby (1.6.dev0) |        1.83  s | 104x
-              corsair (1.0.4) |         2.6  s | 148x
-              PeakRDL (1.1.0) |         7.2  s | 410x
-                 rggen (0.31) |        9.74  s | 555x
-              vhdmmio (0.0.3) |        17.3  s | 987x
+  -------------------------------------------------------------------------------------------------------------
+                        Tool | Generate time | Time relative (lower is better) |   LUT |   FF | LUT+FF relative
+  ---------------------------+---------------+---------------------------------+-------+------+----------------
+   hdl-registers (7.0.4-dev) |       10.4 ms |                   1x (baseline) |  1920 | 6100 |   1x (baseline)
+            cheby (1.6.dev0) |       1.88  s |                            181x |  2120 | 7940 |            1.3x
+             corsair (1.0.4) |       2.33  s |                            224x |  3500 | 7700 |            1.4x
+             PeakRDL (1.2.3) |       6.98  s |                            672x |  7520 | 7300 |            1.8x
+             vhdmmio (0.0.3) |       9.39  s |                            904x |  5700 | 8320 |            1.7x
+                rggen (0.34) |       9.68  s |                            932x | 11880 | 6880 |            2.3x
+
 
 Clearly, only one of these tools is fast enough to run in real time without impacting productivity.
+It is also evident that a lot of resources can be lost or gained depending on what tools is used.
 
 Disclaimer:
 We have tried to be as fair as possible in this comparison, see
@@ -94,7 +95,7 @@ The top-level architecture is very often unique to every project, and it is hard
 automated tool that solves every situation in a clean and elegant way that actually adds value.
 
 With this said, there are some very convenient tools in the sister project
-:ref:`hdl-modules <module_reg_file>` to achieve these things.
+:ref:`hdl-modules <module_register_file>` to achieve these things.
 
 
 .. _similar_tools:

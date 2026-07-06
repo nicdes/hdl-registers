@@ -7,11 +7,9 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Third party libraries
 import pytest
 from tsfpga.system_utils import read_file
 
-# First party libraries
 from hdl_registers import HDL_REGISTERS_TESTS
 from hdl_registers.generator.html.constant_table import HtmlConstantTableGenerator
 from hdl_registers.generator.html.page import HtmlPageGenerator
@@ -27,73 +25,88 @@ class HtmlTest:
         )
 
     def create_html_page(self):
-        html = read_file(HtmlPageGenerator(self.register_list, self.tmp_path).create())
-        return html
+        return read_file(HtmlPageGenerator(self.register_list, self.tmp_path).create())
 
     @staticmethod
-    # pylint: disable=too-many-arguments
     def check_register(name, index, address, mode, default_value, description, html):
         expected = f"""
   <tr>
-    <td><strong>{name}</strong></td>
-    <td>{index}</td>
-    <td>{address}</td>
-    <td>{mode}</td>
-    <td>{default_value}</td>
-    <td>{description}</td>
+    <td><p><strong>{name}</strong></p></td>
+    <td><p>{index}</p></td>
+    <td><p>{address}</p></td>
+    <td><p>{mode}</p></td>
+    <td><p>{default_value}</p></td>
+    <td>
+<p>{description}</p>
+    </td>
   </tr>
 """
-        assert expected in html, f"{expected}\n\n{html}"
+        if expected not in html:
+            print(html)
+            print()
+            print(expected)
+            raise ValueError
 
     @staticmethod
     def check_field(name, index, default_value, html, description=None):
         expected = f"""
   <tr>
-    <td>&nbsp;&nbsp;<em>{name}</em></td>
-    <td>&nbsp;&nbsp;{index}</td>
-    <td></td>
-    <td></td>
-    <td>{default_value}</td>
+    <td><p>&nbsp;&nbsp;<em>{name}</em></p></td>
+    <td><p>&nbsp;&nbsp;{index}</p></td>
+    <td><p></p></td>
+    <td><p></p></td>
+    <td><p>{default_value}</p></td>
 """
         if description:
             expected += f"""\
     <td>
-      {description}
+<p>{description}</p>
     </td>
 """
-
-        assert expected in html, f"{expected}\n\n{html}"
+        if expected not in html:
+            print(html)
+            print()
+            print(expected)
+            raise ValueError
 
     @staticmethod
     def check_register_array(name, length, iterator_range, description, html):
         expected = f"""
   <tr>
     <td class="array_header" colspan=5>
-      Register array <strong>{name}</strong>, repeated {length} times.
-      Iterator <i>{iterator_range}.</i>
+      <p>
+        Register array <strong>{name}</strong>, repeated {length} times.
+        Iterator <span class="formula">{iterator_range}</span>.
+      </p>
     </td>
-    <td class="array_header">{description}</td>
+    <td class="array_header">
+<p>{description}</p>
+    </td>
   </tr>
 """
-        assert expected in html, f"{expected}\n\n{html}"
+        if expected not in html:
+            print(html)
+            print()
+            print(expected)
+            raise ValueError
 
     @staticmethod
     def check_constant(name, value, html):
         expected = f"""
   <tr>
-    <td><strong>{name}</strong></td>
-    <td>{value}</td>
+    <td><p><strong>{name}</strong></p></td>
+    <td><p>{value}</p></td>
 """
-        assert expected in html, f"{expected}\n\n{html}"
+        if expected not in html:
+            print(html)
+            print()
+            print(expected)
+            raise ValueError
 
 
 @pytest.fixture
 def html_test(tmp_path):
     return HtmlTest(tmp_path=tmp_path)
-
-
-# False positive for pytest fixtures
-# pylint: disable=redefined-outer-name
 
 
 def test_registers(html_test):
@@ -103,7 +116,7 @@ def test_registers(html_test):
     html = html_test.create_html_page()
 
     html_test.check_register(
-        name="config",
+        name="conf",
         index=0,
         address="0x0000",
         mode="Read, Write",
@@ -171,7 +184,7 @@ def test_register_fields(html_test):
     html_test.check_field(
         name="plain_enumeration",
         index="15:13",
-        default_value="third",
+        default_value='<span class="docutils literal">third</span>',
         html=html,
     )
     html_test.check_field(
@@ -253,19 +266,17 @@ def test_constants_and_no_registers(html_test):
     html_test.check_constant(name="decrement", value=-8, html=html)
 
 
-def test_register_table_is_empty_string_if_no_registers_are_available(html_test):
+def test_register_table_is_empty_file_if_no_registers_are_available(html_test):
     html_test.register_list.register_objects = []
 
-    html = read_file(
-        HtmlRegisterTableGenerator(html_test.register_list, html_test.tmp_path).create()
-    )
-    assert html == "", html
+    generator = HtmlRegisterTableGenerator(html_test.register_list, html_test.tmp_path)
+    html = read_file(generator.create())
+    assert html == generator.header + "\n", html
 
 
-def test_constant_table_is_empty_string_if_no_constants_are_available(html_test):
+def test_constant_table_is_empty_file_if_no_constants_are_available(html_test):
     html_test.register_list.constants = []
 
-    html = read_file(
-        HtmlConstantTableGenerator(html_test.register_list, html_test.tmp_path).create()
-    )
-    assert html == "", html
+    generator = HtmlConstantTableGenerator(html_test.register_list, html_test.tmp_path)
+    html = read_file(generator.create())
+    assert html == generator.header + "\n", html

@@ -20,8 +20,7 @@ def get_short_slogan() -> str:
     Note that this slogan should be the same as the one used in the readme and on the website below.
     The difference is capitalization and whether the project name is included.
     """
-    result = "An open-source HDL register interface code generator fast enough to run in real time"
-    return result
+    return "An open-source HDL register interface code generator fast enough to run in real time"
 
 
 def get_readme_rst(
@@ -146,9 +145,14 @@ The following code can be generated:
   * AXI-Lite register file wrapper using records and native VHDL types for values.
   * Simulation support packages for compact read/write/wait/checking of register and field values.
 
+* `SystemVerilog <{WEBSITE_URL}/rst/generator/generator_systemverilog.html>`_
+
+  * AXI-Lite register file using structures and native types to represent field values.
+
 * `C++ <{WEBSITE_URL}/rst/generator/generator_cpp.html>`_
 
   * Complete class with setters and getters for registers and fields.
+    Uses structs and native C++ representation of values.
   * Includes an abstract interface header for unit test mocking.
 
 * `C header <{WEBSITE_URL}/rst/generator/generator_c.html>`_

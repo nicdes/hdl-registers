@@ -7,18 +7,18 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Optional, Union
 
 
 def from_unsigned_binary(
     num_bits: int,
     value: int,
-    num_integer_bits: Optional[int] = None,
+    num_integer_bits: int | None = None,
     num_fractional_bits: int = 0,
     is_signed: bool = False,
-) -> Union[int, float]:
+) -> int | float:
     """
     Convert from a fixed-point unsigned binary value to one of
 
@@ -52,7 +52,7 @@ def from_unsigned_binary(
     if num_integer_bits + num_fractional_bits != num_bits:
         raise ValueError("Inconsistent bit width")
 
-    result: Union[int, float] = value * 2**-num_fractional_bits
+    result: int | float = value * 2**-num_fractional_bits
 
     if is_signed:
         sign_bit = value & (1 << (num_bits - 1))
@@ -65,8 +65,8 @@ def from_unsigned_binary(
 
 def to_unsigned_binary(
     num_bits: int,
-    value: Union[int, float],
-    num_integer_bits: Optional[int] = None,
+    value: float,
+    num_integer_bits: int | None = None,
     num_fractional_bits: int = 0,
     is_signed: bool = False,
 ) -> int:
@@ -118,12 +118,21 @@ def to_unsigned_binary(
 
 class NumericalInterpretation(ABC):
     """
-    This class represents different modes used when interpreting a field of bits as a numeric value.
+    Represents different modes used when interpreting a field of bits as a numeric value.
     Contains metadata, helper methods, etc.
     """
 
     # Width of the field in number of bits.
     bit_width: int
+
+    @property
+    def name(self) -> str:
+        """
+        Short name that describes the numerical interpretation.
+        E.g. "Unsigned".
+        We might add bit widths to this in the future.
+        """
+        return self.__class__.__name__
 
     @property
     @abstractmethod
@@ -134,7 +143,7 @@ class NumericalInterpretation(ABC):
 
     @property
     @abstractmethod
-    def min_value(self) -> Union[int, float]:
+    def min_value(self) -> int | float:
         """
         Minimum representable value for this field, in its native numeric representation.
 
@@ -145,7 +154,7 @@ class NumericalInterpretation(ABC):
 
     @property
     @abstractmethod
-    def max_value(self) -> Union[int, float]:
+    def max_value(self) -> int | float:
         """
         Maximum representable value for this field, in its native numeric representation.
 
@@ -155,7 +164,7 @@ class NumericalInterpretation(ABC):
         """
 
     @abstractmethod
-    def convert_from_unsigned_binary(self, unsigned_binary: int) -> Union[int, float]:
+    def convert_from_unsigned_binary(self, unsigned_binary: int) -> int | float:
         """
         Convert from the unsigned binary integer representation of a field,
         into the native value of the field.
@@ -165,7 +174,7 @@ class NumericalInterpretation(ABC):
         """
 
     @abstractmethod
-    def convert_to_unsigned_binary(self, value: Union[int, float]) -> int:
+    def convert_to_unsigned_binary(self, value: float) -> int:
         """
         Convert from the native value of the field, into the
         unsigned binary integer representation which can be written to a register.
@@ -181,7 +190,7 @@ class NumericalInterpretation(ABC):
     def __repr__(self) -> str:
         pass
 
-    def _check_native_value_in_range(self, value: Union[int, float]) -> None:
+    def _check_native_value_in_range(self, value: float) -> None:
         """
         Raise an exception if the given field value is not within the allowed range.
         Note that this is the native field value, not the raw binary value.
@@ -189,6 +198,11 @@ class NumericalInterpretation(ABC):
         Arguments:
             value: Native Python representation of the field value.
         """
+        if isinstance(value, float) and (not value.is_integer()) and (not isinstance(self, Fixed)):
+            raise ValueError(
+                f"Fractional value passed to non-fractional numerical type. Got: {value}."
+            )
+
         min_ = self.min_value
         max_ = self.max_value
         if not min_ <= value <= max_:
@@ -196,7 +210,7 @@ class NumericalInterpretation(ABC):
                 f"Value: {value} out of range of {self.bit_width}-bit ({min_}, {max_})."
             )
 
-    def _check_unsigned_binary_value_in_range(self, value: Union[int, float]) -> None:
+    def _check_unsigned_binary_value_in_range(self, value: float) -> None:
         """
         Raise an exception if the given unsigned binary value does not fit in the field.
 
@@ -215,7 +229,7 @@ class Unsigned(NumericalInterpretation):
 
     is_signed: bool = False
 
-    def __init__(self, bit_width: int):
+    def __init__(self, bit_width: int) -> None:
         self.bit_width = bit_width
 
     @property
@@ -232,8 +246,15 @@ class Unsigned(NumericalInterpretation):
         return unsigned_binary
 
     def convert_to_unsigned_binary(self, value: float) -> int:
+        """
+        Note that the argument is of type ``float`` (which according to Python typing
+        means that either ``int`` or ``float`` values can be passed).
+        This is to keep the same API as the others.
+        However since this numerical interpretation has no fractional bits, the value provided
+        must be an integer.
+        """
         self._check_native_value_in_range(value)
-        return round(value)
+        return int(value)
 
     def __repr__(self) -> str:
         return f"""{self.__class__.__name__}(\
@@ -248,7 +269,7 @@ class Signed(NumericalInterpretation):
 
     is_signed: bool = True
 
-    def __init__(self, bit_width: int):
+    def __init__(self, bit_width: int) -> None:
         self.bit_width = bit_width
 
     @property
@@ -270,6 +291,13 @@ class Signed(NumericalInterpretation):
         )
 
     def convert_to_unsigned_binary(self, value: float) -> int:
+        """
+        Note that the argument is of type ``float`` (which according to Python typing
+        means that either ``int`` or ``float`` values can be passed).
+        This is to keep the same API as the others.
+        However since this numerical interpretation has no fractional bits, the value provided
+        must be an integer.
+        """
         self._check_native_value_in_range(value)
         return to_unsigned_binary(num_bits=self.bit_width, value=value, is_signed=self.is_signed)
 
@@ -280,7 +308,7 @@ bit_width={self.bit_width},\
 
 
 class Fixed(NumericalInterpretation, ABC):
-    def __init__(self, is_signed: bool, max_bit_index: int, min_bit_index: int):
+    def __init__(self, is_signed: bool, max_bit_index: int, min_bit_index: int) -> None:
         """
         Abstract baseclass for fixed-point fields.
 
@@ -356,7 +384,7 @@ min_bit_index={self.min_bit_index},\
 
 
 class UnsignedFixedPoint(Fixed):
-    def __init__(self, max_bit_index: int, min_bit_index: int):
+    def __init__(self, max_bit_index: int, min_bit_index: int) -> None:
         """
         Unsigned fixed point format to represent fractional values.
 
@@ -376,9 +404,7 @@ class UnsignedFixedPoint(Fixed):
         super().__init__(is_signed=False, max_bit_index=max_bit_index, min_bit_index=min_bit_index)
 
     @classmethod
-    def from_bit_widths(
-        cls, integer_bit_width: int, fraction_bit_width: int
-    ) -> "UnsignedFixedPoint":
+    def from_bit_widths(cls, integer_bit_width: int, fraction_bit_width: int) -> UnsignedFixedPoint:
         """
         Create instance via the respective fixed point bit widths.
 
@@ -391,7 +417,7 @@ class UnsignedFixedPoint(Fixed):
 
 
 class SignedFixedPoint(Fixed):
-    def __init__(self, max_bit_index: int, min_bit_index: int):
+    def __init__(self, max_bit_index: int, min_bit_index: int) -> None:
         """
         Signed fixed point format to represent fractional values.
         Signed integer uses two's complement representation.
@@ -412,7 +438,7 @@ class SignedFixedPoint(Fixed):
         super().__init__(is_signed=True, max_bit_index=max_bit_index, min_bit_index=min_bit_index)
 
     @classmethod
-    def from_bit_widths(cls, integer_bit_width: int, fraction_bit_width: int) -> "SignedFixedPoint":
+    def from_bit_widths(cls, integer_bit_width: int, fraction_bit_width: int) -> SignedFixedPoint:
         """
         Create instance via the respective fixed point bit widths.
 

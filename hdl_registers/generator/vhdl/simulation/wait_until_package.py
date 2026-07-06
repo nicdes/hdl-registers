@@ -7,18 +7,17 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# Standard libraries
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from __future__ import annotations
 
-# First party libraries
+from typing import TYPE_CHECKING, Any
+
 from hdl_registers.register_mode import SoftwareAccessDirection
 
-# Local folder libraries
 from .vhdl_simulation_generator_common import VhdlSimulationGeneratorCommon
 
 if TYPE_CHECKING:
-    # First party libraries
+    from pathlib import Path
+
     from hdl_registers.field.register_field import RegisterField
     from hdl_registers.register import Register
     from hdl_registers.register_array import RegisterArray
@@ -39,9 +38,10 @@ class VhdlSimulationWaitUntilPackageGenerator(VhdlSimulationGeneratorCommon):
 
     The generated VHDL file needs also the generated packages from
     :class:`.VhdlRegisterPackageGenerator` and :class:`.VhdlRecordPackageGenerator`.
+    See :ref:`vhdl_dependencies` for further dependencies.
     """
 
-    __version__ = "1.0.0"
+    __version__ = "1.0.2"
 
     SHORT_DESCRIPTION = "VHDL simulation wait until package"
 
@@ -52,7 +52,10 @@ class VhdlSimulationWaitUntilPackageGenerator(VhdlSimulationGeneratorCommon):
         """
         return self.output_folder / f"{self.name}_register_wait_until_pkg.vhd"
 
-    def create(self, **kwargs: Any) -> Path:
+    def create(
+        self,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> Path:
         """
         See super class for API details.
 
@@ -61,14 +64,16 @@ class VhdlSimulationWaitUntilPackageGenerator(VhdlSimulationGeneratorCommon):
         """
         return self._create_if_there_are_registers_otherwise_delete_file(**kwargs)
 
-    def get_code(self, **kwargs: Any) -> str:
+    def get_code(
+        self,
+        **kwargs: Any,  # noqa: ANN401, ARG002
+    ) -> str:
         """
         Get a package with ``wait_until_X_equals`` methods for registers/fields.
         """
         package_name = self.output_file.stem
 
-        vhdl = f"""\
-{self.header}
+        return f"""\
 library ieee;
 use ieee.fixed_pkg.all;
 use ieee.std_logic_1164.all;
@@ -81,13 +86,9 @@ use vunit_lib.com_types_pkg.max_timeout;
 use vunit_lib.com_types_pkg.network_t;
 use vunit_lib.string_ops.hex_image;
 
-library common;
-use common.addr_pkg.addr_t;
-use common.addr_pkg.addr_width;
-
-library reg_file;
-use reg_file.reg_file_pkg.reg_t;
-use reg_file.reg_operations_pkg.regs_bus_master;
+library register_file;
+use register_file.register_file_pkg.register_t;
+use register_file.register_operations_pkg.register_bus_master;
 
 use work.{self.name}_regs_pkg.all;
 use work.{self.name}_register_record_pkg.all;
@@ -103,8 +104,6 @@ package body {package_name} is
 {self._implementations()}\
 end package body;
 """
-
-        return vhdl
 
     def _declarations(self) -> str:
         """
@@ -137,7 +136,7 @@ end package body;
         return vhdl
 
     def _register_wait_until_equals_signature(
-        self, register: "Register", register_array: Optional["RegisterArray"]
+        self, register: Register, register_array: RegisterArray | None
     ) -> str:
         """
         Get signature for a 'wait_until_reg_equals' procedure.
@@ -153,7 +152,7 @@ end package body;
             value_type = f"{register_name}_t"
             slv_comment = ""
         else:
-            value_type = "reg_t"
+            value_type = "register_t"
             slv_comment = (
                 "  -- Note that '-' can be used as a wildcard in 'value' since 'check_match' is \n"
                 "  -- used to check for equality.\n"
@@ -166,8 +165,8 @@ end package body;
     signal net : inout network_t;
 {self.get_array_index_port(register_array=register_array)}\
     value : in {value_type};
-    base_address : in addr_t := (others => '0');
-    bus_handle : in bus_master_t := regs_bus_master;
+    base_address : in unsigned(32 - 1 downto 0) := (others => '0');
+    bus_handle : in bus_master_t := register_bus_master;
     timeout : delay_length := max_timeout;
     message : string := ""
   )\
@@ -175,9 +174,9 @@ end package body;
 
     def _field_wait_until_equals_signature(
         self,
-        register: "Register",
-        register_array: Optional["RegisterArray"],
-        field: "RegisterField",
+        register: Register,
+        register_array: RegisterArray | None,
+        field: RegisterField,
     ) -> str:
         """
         Get signature for a 'wait_until_field_equals' procedure.
@@ -199,8 +198,8 @@ end package body;
     signal net : inout network_t;
 {self.get_array_index_port(register_array=register_array)}\
     value : in {value_type};
-    base_address : in addr_t := (others => '0');
-    bus_handle : in bus_master_t := regs_bus_master;
+    base_address : in unsigned(32 - 1 downto 0) := (others => '0');
+    bus_handle : in bus_master_t := register_bus_master;
     timeout : delay_length := max_timeout;
     message : string := ""
   )\
@@ -216,20 +215,18 @@ end package body;
         for register, register_array in self.iterate_software_accessible_registers(
             direction=SoftwareAccessDirection.READ
         ):
-            implementations = []
-
-            implementations.append(
+            implementations = [
                 self._register_wait_until_equals_implementation(
                     register=register, register_array=register_array
                 )
-            )
+            ]
 
-            for field in register.fields:
-                implementations.append(
-                    self._field_wait_until_equals_implementation(
-                        register=register, register_array=register_array, field=field
-                    )
+            implementations.extend(
+                self._field_wait_until_equals_implementation(
+                    register=register, register_array=register_array, field=field
                 )
+                for field in register.fields
+            )
 
             vhdl += separator
             vhdl += "\n".join(implementations)
@@ -239,7 +236,7 @@ end package body;
         return vhdl
 
     def _register_wait_until_equals_implementation(
-        self, register: "Register", register_array: Optional["RegisterArray"]
+        self, register: Register, register_array: RegisterArray | None
     ) -> str:
         """
         Get implementation for a 'wait_until_reg_equals' procedure.
@@ -252,7 +249,7 @@ end package body;
 
         return f"""\
 {signature} is
-    constant reg_value : reg_t := {conversion};
+    constant reg_value : register_t := {conversion};
 
 {self._get_common_constants(register=register, register_array=register_array, field=None)}\
   begin
@@ -269,9 +266,9 @@ end package body;
 
     def _field_wait_until_equals_implementation(
         self,
-        register: "Register",
-        register_array: Optional["RegisterArray"],
-        field: "RegisterField",
+        register: Register,
+        register_array: RegisterArray | None,
+        field: RegisterField,
     ) -> str:
         """
         Get implementation for a 'wait_until_field_equals' procedure.
@@ -286,7 +283,7 @@ end package body;
 
         return f"""\
 {signature} is
-    constant reg_value : reg_t := (
+    constant reg_value : register_t := (
       {field_name} => {field_to_slv},
       others => '-'
     );
@@ -305,18 +302,12 @@ end package body;
 """
 
     def _get_common_constants(
-        self,
-        register: "Register",
-        register_array: Optional["RegisterArray"],
-        field: Optional["RegisterField"],
+        self, register: Register, register_array: RegisterArray | None, field: RegisterField | None
     ) -> str:
         """
         Get constants code that is common for all 'wait_until_*_equals' procedures.
         """
-        if field:
-            field_description = f" the '{field.name}' field in"
-        else:
-            field_description = ""
+        field_description = f" the '{field.name}' field in" if field else ""
 
         return f"""\
 {self.reg_index_constant(register=register, register_array=register_array)}\
