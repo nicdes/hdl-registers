@@ -152,6 +152,18 @@ class Register:
         if self.bit_index > 32:
             raise ValueError(f'Maximum width exceeded for register "{self.name}".')
 
+    @property
+    def default_value(self) -> int:
+        """
+        The default value of this register as an unsigned integer.
+        Depends on the default values of the fields in this register.
+        """
+        default_value = 0
+        for field in self.fields:
+            default_value += field.default_value_uint * 2**field.base_index
+
+        return default_value
+
     def get_field(self, name: str) -> RegisterField:
         """
         Get the field within this register that has the given name. Will raise exception if no

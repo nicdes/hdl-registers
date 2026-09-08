@@ -158,22 +158,19 @@ def test_default_values_on_reset(tmp_path):
 
     for register in register_list.register_objects:
         for field in register.fields:
-            default_value_int = (
-                field.default_value.value
-                if isinstance(field, Enumeration)
-                else field.default_value
-                if isinstance(field, Integer)
-                else int(field.default_value, 2)
-            )
-            default_value_hex = hex(default_value_int)[2:]
-
-            print(field)
             reset_assign = f"""
         if(rst) begin
             field_storage.{register.name}.{field.name}.value <="""
 
             if register.mode.software_can_write:
-                assert f"{reset_assign} {field.width}'h{default_value_hex};\n" in sv
+                default_value_int = (
+                    field.default_value.value
+                    if isinstance(field, Enumeration)
+                    else field.default_value
+                    if isinstance(field, Integer)
+                    else int(field.default_value, 2)
+                )
+                assert f"{reset_assign} {field.width}'h{default_value_int:x};\n" in sv
             else:
                 assert reset_assign not in sv
 
@@ -196,11 +193,11 @@ def test_field_bit_indexes(tmp_path):
                 ) in sv
 
             if register.mode.software_can_read:
+                bits_single_adjusted = bits if field.width > 1 else str(field.base_index)
                 value_source = "field_storage" if register.mode.software_can_write else "hwif_in"
                 assert (
-                    f"[{bits}] = (decoded_reg_strb.{register.name} && !decoded_req_is_wr) ? "
-                    f"{value_source}.{register.name}.{field.name}."
-                ) in sv
+                    f"[{bits_single_adjusted}] = {value_source}.{register.name}.{field.name}" in sv
+                )
 
 
 def test_enumeration_naming_and_encoding(tmp_path):

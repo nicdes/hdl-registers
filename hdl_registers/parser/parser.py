@@ -7,12 +7,11 @@
 # https://github.com/hdl-registers/hdl-registers
 # --------------------------------------------------------------------------------------------------
 
-# ruff: noqa: A005
-
 from __future__ import annotations
 
 import copy
 import json
+from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import tomli_w
@@ -21,6 +20,12 @@ from tsfpga import DEFAULT_FILE_ENCODING
 
 from hdl_registers.about import WEBSITE_URL
 from hdl_registers.constant.bit_vector_constant import UnsignedVector
+from hdl_registers.field.numerical_interpretation import (
+    Signed,
+    SignedFixedPoint,
+    Unsigned,
+    UnsignedFixedPoint,
+)
 from hdl_registers.register_list import RegisterList
 from hdl_registers.register_modes import REGISTER_MODES
 
@@ -57,8 +62,8 @@ class RegisterParser:
 
     # Attributes of the constant.
     recognized_constant_items: ClassVar = {"type", "value", "description", "data_type"}
-    # Note that "type" being present is implied. We would not be parsing a constant unless we
-    # know it to be a "constant" type.
+    # Note that "type" being present is implied.
+    # We would not be parsing a constant unless "type" equal to "constant" was seen.
     # So we save some CPU cycles by not checking for it.
     required_constant_items: ClassVar = ["value"]
 
@@ -78,28 +83,42 @@ class RegisterParser:
     # Anything apart from these are names of registers.
     default_register_array_items: ClassVar = {"type", "array_length", "description"}
     # Note that "type" being present is implied.
-    # We would not be parsing a register array unless we know it to be a "register_array" type.
+    # We would not be parsing a register array unless "type" equal to "register_array" was seen.
     # So we save some CPU cycles by not checking for it.
     required_register_array_items: ClassVar = ["array_length"]
 
     # Attributes of the "bit" register field.
     recognized_bit_items: ClassVar = {"type", "description", "default_value"}
     # Note that "type" being present is implied.
-    # We would not be parsing a bit unless we know it to be a "bit" type.
+    # We would not be parsing a bit unless "type" equal to "bit" was seen.
     # So we save some CPU cycles by not checking for it.
     required_bit_items: ClassVar[list[str]] = []
 
     # Attributes of the "bit_vector" register field.
-    recognized_bit_vector_items: ClassVar = {"type", "description", "width", "default_value"}
+    recognized_bit_vector_items: ClassVar = {
+        "type",
+        "description",
+        "width",
+        "default_value",
+        "numerical_interpretation",
+        "min_bit_index",
+    }
     # Note that "type" being present is implied.
-    # We would not be parsing a bit_vector unless we know it to be a "bit_vector" type.
+    # We would not be parsing a bit vector unless "type" equal to "bit_vector" was seen.
     # So we save some CPU cycles by not checking for it.
     required_bit_vector_items: ClassVar = ["width"]
+
+    # The "numerical_interpretation" property of a "bit_vector" field may take only these values.
+    class _RecognizedBitVectorNumericalInterpretationItems(Enum):
+        UNSIGNED = "unsigned"
+        SIGNED = "signed"
+        UNSIGNED_FIXED_POINT = "unsigned_fixed_point"
+        SIGNED_FIXED_POINT = "signed_fixed_point"
 
     # Attributes of the "enumeration" register field.
     recognized_enumeration_items: ClassVar = {"type", "description", "default_value", "element"}
     # Note that "type" being present is implied.
-    # We would not be parsing a enumeration unless we know it to be a "enumeration" type.
+    # We would not be parsing an enumeration unless "type" equal to "enumeration" was seen.
     # So we save some CPU cycles by not checking for it.
     required_enumeration_items: ClassVar = ["element"]
 
@@ -112,7 +131,7 @@ class RegisterParser:
         "default_value",
     }
     # Note that "type" being present is implied.
-    # We would not be parsing a integer unless we know it to be a "integer" type.
+    # We would not be parsing an integer unless "type" equal to "integer" was seen.
     # So we save some CPU cycles by not checking for it.
     required_integer_items: ClassVar = ["max_value"]
 
@@ -339,7 +358,10 @@ ERROR: Please inspect that file and update your data file to the new format.
                 raise ValueError(message)
 
             parser_methods[field_type](
-                register=register, field_name=item_name, field_items=item_value
+                register=register,
+                field_name=item_name,
+                field_items=item_value,
+                register_array_note=register_array_note,
             )
 
     def _parse_register_array(self, name: str, items: dict[str, Any]) -> None:
@@ -423,6 +445,7 @@ ERROR: Please inspect that file and update your data file to the new format.
         field_items: dict[str, Any],
         recognized_items: set[str],
         required_items: list[str],
+        register_array_note: str,
     ) -> None:
         """
         Will raise exception if anything is wrong.
@@ -430,8 +453,8 @@ ERROR: Please inspect that file and update your data file to the new format.
         for item_name in required_items:
             if item_name not in field_items:
                 message = (
-                    f'Error while parsing field "{field_name}" in register "{register_name}" in '
-                    f"{self._source_definition_file}: "
+                    f'Error while parsing field "{field_name}" in register '
+                    f'"{register_name}"{register_array_note} in {self._source_definition_file}: '
                     f'Missing required property "{item_name}".'
                 )
                 raise ValueError(message)
@@ -440,18 +463,25 @@ ERROR: Please inspect that file and update your data file to the new format.
             if item_name not in recognized_items:
                 message = (
                     f'Error while parsing field "{field_name}" in register '
-                    f'"{register_name}" in {self._source_definition_file}: '
+                    f'"{register_name}"{register_array_note} in {self._source_definition_file}: '
                     f'Unknown property "{item_name}".'
                 )
                 raise ValueError(message)
 
-    def _parse_bit(self, register: Register, field_name: str, field_items: dict[str, Any]) -> None:
+    def _parse_bit(
+        self,
+        register: Register,
+        field_name: str,
+        field_items: dict[str, Any],
+        register_array_note: str,
+    ) -> None:
         self._check_field_items(
             register_name=register.name,
             field_name=field_name,
             field_items=field_items,
             recognized_items=self.recognized_bit_items,
             required_items=self.required_bit_items,
+            register_array_note=register_array_note,
         )
 
         description = field_items.get("description", "")
@@ -460,7 +490,11 @@ ERROR: Please inspect that file and update your data file to the new format.
         register.append_bit(name=field_name, description=description, default_value=default_value)
 
     def _parse_bit_vector(
-        self, register: Register, field_name: str, field_items: dict[str, Any]
+        self,
+        register: Register,
+        field_name: str,
+        field_items: dict[str, Any],
+        register_array_note: str,
     ) -> None:
         self._check_field_items(
             register_name=register.name,
@@ -468,6 +502,7 @@ ERROR: Please inspect that file and update your data file to the new format.
             field_items=field_items,
             recognized_items=self.recognized_bit_vector_items,
             required_items=self.required_bit_vector_items,
+            register_array_note=register_array_note,
         )
 
         width = field_items["width"]
@@ -475,12 +510,53 @@ ERROR: Please inspect that file and update your data file to the new format.
         description = field_items.get("description", "")
         default_value = field_items.get("default_value", 0)
 
+        min_bit_index = field_items.get("min_bit_index", 0)
+        max_bit_index = min_bit_index + width - 1
+
+        numerical_interpretation_str = field_items.get("numerical_interpretation", "unsigned")
+        match numerical_interpretation_str:
+            case self._RecognizedBitVectorNumericalInterpretationItems.UNSIGNED.value:
+                numerical_interpretation = Unsigned(bit_width=width)
+            case self._RecognizedBitVectorNumericalInterpretationItems.SIGNED.value:
+                numerical_interpretation = Signed(bit_width=width)
+            case self._RecognizedBitVectorNumericalInterpretationItems.UNSIGNED_FIXED_POINT.value:
+                numerical_interpretation = UnsignedFixedPoint(
+                    max_bit_index=max_bit_index, min_bit_index=min_bit_index
+                )
+            case self._RecognizedBitVectorNumericalInterpretationItems.SIGNED_FIXED_POINT.value:
+                numerical_interpretation = SignedFixedPoint(
+                    max_bit_index=max_bit_index, min_bit_index=min_bit_index
+                )
+            case _:
+                valid_interpretations_str = ", ".join(
+                    [
+                        f'"{interpretation.value}"'
+                        for interpretation in self._RecognizedBitVectorNumericalInterpretationItems
+                    ]
+                )
+                message = (
+                    f'Error while parsing field "{field_name}" in register '
+                    f'"{register.name}" in {self._source_definition_file}: '
+                    f'Unknown value "{numerical_interpretation_str}" for '
+                    'property "numerical_interpretation". '
+                    f"Expected one of {valid_interpretations_str}."
+                )
+                raise ValueError(message)
+
         register.append_bit_vector(
-            name=field_name, description=description, width=width, default_value=default_value
+            name=field_name,
+            description=description,
+            width=width,
+            default_value=default_value,
+            numerical_interpretation=numerical_interpretation,
         )
 
     def _parse_enumeration(
-        self, register: Register, field_name: str, field_items: dict[str, Any]
+        self,
+        register: Register,
+        field_name: str,
+        field_items: dict[str, Any],
+        register_array_note: str,
     ) -> None:
         self._check_field_items(
             register_name=register.name,
@@ -494,6 +570,7 @@ ERROR: Please inspect that file and update your data file to the new format.
             # However, this particular check is needed here also since the logic for default
             # value below does not work if there are no elements.
             required_items=self.required_enumeration_items,
+            register_array_note=register_array_note,
         )
 
         description = field_items.get("description", "")
@@ -514,7 +591,11 @@ ERROR: Please inspect that file and update your data file to the new format.
         )
 
     def _parse_integer(
-        self, register: Register, field_name: str, field_items: dict[str, Any]
+        self,
+        register: Register,
+        field_name: str,
+        field_items: dict[str, Any],
+        register_array_note: str,
     ) -> None:
         self._check_field_items(
             register_name=register.name,
@@ -522,6 +603,7 @@ ERROR: Please inspect that file and update your data file to the new format.
             field_items=field_items,
             recognized_items=self.recognized_integer_items,
             required_items=self.required_integer_items,
+            register_array_note=register_array_note,
         )
 
         max_value = field_items["max_value"]
